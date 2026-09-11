@@ -50,11 +50,12 @@ fun LauncherApp(onClose: () -> Unit) {
     GameLauncherTheme {
         val context = LocalContext.current
         val snapshot = remember(context) { InstalledCatalog.load(context) }
-        val artwork = remember(context) { ArtworkRepository(context) }
         val newsRepo = remember(context) { PlayNewsRepository(context) }
+        val artwork = remember(context) { ArtworkRepository(context, newsRepo) }
         val news by newsRepo.news.collectAsState()
         val newsLoading by newsRepo.loading.collectAsState()
         LaunchedEffect(snapshot) { newsRepo.refresh(snapshot) }
+        LaunchedEffect(news) { artwork.onPlayArtUpdated() }
         var stack by remember { mutableStateOf(listOf<Screen>(Screen.Home)) }
         var menuOpen by remember { mutableStateOf(false) }
         var userMenuOpen by remember { mutableStateOf(false) }

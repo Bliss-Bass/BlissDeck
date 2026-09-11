@@ -22,7 +22,10 @@ data class Artwork(
         if (landscape) heroUrl ?: coverUrl else coverUrl ?: heroUrl
 }
 
-class ArtworkRepository(context: Context) {
+class ArtworkRepository(
+    context: Context,
+    private val playNews: PlayNewsRepository? = null,
+) {
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences("artwork", Context.MODE_PRIVATE)
     private val client = SteamGridClient()
@@ -50,35 +53,55 @@ class ArtworkRepository(context: Context) {
     fun iconFor(packageName: String): Drawable? =
         runCatching { appContext.packageManager.getApplicationIcon(packageName) }.getOrNull()
 
+    fun onPlayArtUpdated() {
+        var changed = false
+        memory.replaceAll { pkg, art ->
+            if (!art.heroUrl.isNullOrBlank()) return@replaceAll art
+            val playHero = playNews?.heroUrl(pkg)
+            if (playHero.isNullOrBlank()) art else {
+                changed = true
+                art.copy(heroUrl = playHero)
+            }
+        }
+        if (changed) bump()
+    }
+
     suspend fun resolve(packageName: String, title: String, isGame: Boolean): Artwork =
         withContext(Dispatchers.IO) {
             val mutex = locks.getOrPut(packageName) { Mutex() }
             mutex.withLock {
-                memory[packageName]?.let { return@withLock it }
+                memory[packageName]?.let { cached ->
+                    return@withLock cached.withPlayHero(packageName).also { memory[packageName] = it }
+                }
                 val icon = iconFor(packageName)
                 val savedId = steamGridId(packageName)
                 val savedCover = prefs.getString(coverKey(packageName), null)
                 val savedHero = prefs.getString(heroKey(packageName), null)
+                val playHero = playNews?.heroUrl(packageName)
                 if (savedCover != null || savedHero != null) {
-                    return@withLock Artwork(packageName, savedId, savedCover, savedHero, icon).also {
-                        memory[packageName] = it
-                    }
+                    return@withLock Artwork(
+                        packageName,
+                        savedId,
+                        savedCover,
+                        savedHero ?: playHero,
+                        icon,
+                    ).also { memory[packageName] = it }
                 }
                 val key = apiKey
                 if (key.isBlank() || authFailed || (!isGame && savedId == null)) {
-                    return@withLock Artwork(packageName, savedId, null, null, icon).also {
+                    return@withLock Artwork(packageName, savedId, null, playHero, icon).also {
                         memory[packageName] = it
                     }
                 }
                 val resolved = runCatching {
                     val id = savedId ?: matchId(key, title)
-                        ?: return@runCatching Artwork(packageName, null, null, null, icon)
+                        ?: return@runCatching Artwork(packageName, null, null, playHero, icon)
                     val art = client.artwork(key, id)
                     persist(packageName, id, art.coverUrl, art.heroUrl)
-                    Artwork(packageName, id, art.coverUrl, art.heroUrl, icon)
+                    Artwork(packageName, id, art.coverUrl, art.heroUrl ?: playHero, icon)
                 }.getOrElse { error ->
                     if (error is SteamGridAuthException) authFailed = true
-                    Artwork(packageName, savedId, null, null, icon)
+                    Artwork(packageName, savedId, null, playHero, icon)
                 }
                 memory[packageName] = resolved
                 resolved
@@ -94,6 +117,12 @@ class ArtworkRepository(context: Context) {
             .apply()
         memory.remove(packageName)
         bump()
+    }
+
+    private fun Artwork.withPlayHero(packageName: String): Artwork {
+        if (!heroUrl.isNullOrBlank()) return this
+        val playHero = playNews?.heroUrl(packageName) ?: return this
+        return copy(heroUrl = playHero)
     }
 
     private fun persist(packageName: String, id: String, cover: String?, hero: String?) {

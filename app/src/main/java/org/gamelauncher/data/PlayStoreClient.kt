@@ -13,6 +13,7 @@ internal data class PlayListing(
     val updatedDisplay: String?,
     val updatedMillis: Long?,
     val backgroundUrl: String?,
+    val heroUrl: String?,
 )
 
 internal class PlayStoreClient {
@@ -51,6 +52,11 @@ internal class PlayStoreClient {
         private val WHATS_NEW_DIV = Regex("""itemprop="description">([^<].+?)</div>""")
         private val OG_TITLE = Regex("""property="og:title" content="([^"]+)"""")
         private val OG_IMAGE = Regex("""property="og:image" content="([^"]+)"""")
+        private val PLAY_LH = Regex(
+            """https://play-lh\.googleusercontent\.com/[A-Za-z0-9_\-]+(?:=[A-Za-z0-9_=.,\-]*)?""",
+        )
+        private val PLAY_SIZE = Regex("""w(\d+)-h(\d+)""")
+
         fun parse(html: String): PlayListing? {
             val cluster = CLUSTER.find(html)
             val version = cluster?.groupValues?.get(1) ?: VERSION.find(html)?.groupValues?.get(1)
@@ -65,6 +71,8 @@ internal class PlayStoreClient {
                 ?.trim()
             val background = OG_IMAGE.find(html)?.groupValues?.get(1)
                 ?.replace("&amp;", "&")
+                ?.let { fullSizePlayImage(it) }
+            val hero = pickLandscapeHero(html) ?: background?.takeIf { looksWide(it, html) }
             val whatsNew = htmlToPlain(rawWhats.orEmpty()).ifBlank { null }
             if (title.isNullOrBlank() && version.isNullOrBlank() && rawDate.isNullOrBlank()) {
                 return null
@@ -76,8 +84,42 @@ internal class PlayStoreClient {
                 version = version,
                 updatedDisplay = parsedDate?.second ?: rawDate,
                 updatedMillis = parsedDate?.first,
-                backgroundUrl = background,
+                backgroundUrl = hero ?: background,
+                heroUrl = hero,
             )
+        }
+
+        internal fun pickLandscapeHero(html: String): String? {
+            val seen = LinkedHashSet<String>()
+            var bestToken: String? = null
+            for (match in PLAY_LH.findAll(html)) {
+                val url = match.value.replace("&amp;", "&").replace("\\u003d", "=")
+                val token = url.substringBefore("=")
+                if (!seen.add(token)) continue
+                val size = PLAY_SIZE.find(url) ?: continue
+                val width = size.groupValues[1].toInt()
+                val height = size.groupValues[2].toInt()
+                if (width < 400 || height < 200) continue
+                if (width < height * 1.2f) continue
+                bestToken = token
+                break
+            }
+            return bestToken?.let { fullSizePlayImage(it) }
+        }
+
+        private fun looksWide(url: String, html: String): Boolean {
+            val token = url.substringBefore("=")
+            return PLAY_LH.findAll(html).any { match ->
+                val candidate = match.value.replace("&amp;", "&")
+                if (!candidate.startsWith(token)) return@any false
+                val size = PLAY_SIZE.find(candidate) ?: return@any false
+                size.groupValues[1].toInt() >= size.groupValues[2].toInt() * 1.2f
+            }
+        }
+
+        private fun fullSizePlayImage(url: String): String {
+            val token = url.substringBefore("=").substringBefore("\\")
+            return "$token=s0"
         }
 
         internal fun classify(whatsNew: String?): String {

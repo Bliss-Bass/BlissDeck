@@ -53,7 +53,7 @@ class PlayNewsRepository(context: Context) {
                         val listing = runCatching { client.fetch(app.packageName) }.getOrNull()
                         val cached = listing.toCached()
                         writeCache(app.packageName, cached)
-                        Log.d(TAG, "listing ${app.packageName} version=${cached.version} date=${cached.updatedDisplay}")
+                        Log.d(TAG, "listing ${app.packageName} version=${cached.version} date=${cached.updatedDisplay} hero=${!cached.heroUrl.isNullOrBlank()}")
                         known[app.packageName] = cached
                     }
                 }
@@ -121,6 +121,14 @@ class PlayNewsRepository(context: Context) {
 
     private fun cacheFile(packageName: String) = File(cacheDir, "$packageName.json")
 
+    fun heroUrl(packageName: String): String? {
+        val file = cacheFile(packageName)
+        if (!file.isFile) return null
+        return runCatching {
+            JSONObject(file.readText()).optString("hero").ifBlank { null }
+        }.getOrNull()
+    }
+
     companion object {
         private const val TAG = "PlayNews"
         private const val OTHER_APP_WINDOW_MS = 120L * 24 * 60 * 60 * 1000
@@ -134,10 +142,13 @@ internal data class CachedListing(
     val updatedDisplay: String?,
     val updatedMillis: Long?,
     val backgroundUrl: String?,
+    val heroUrl: String?,
     val queriedAt: Long,
     val missing: Boolean,
+    val hasHeroField: Boolean = true,
 ) {
     fun stale(): Boolean {
+        if (!missing && !hasHeroField) return true
         val ttl = if (missing) MISS_TTL_MS else HIT_TTL_MS
         return System.currentTimeMillis() - queriedAt > ttl
     }
@@ -152,7 +163,7 @@ internal data class CachedListing(
             version = versionLabel,
             gameId = app.id,
             gameTitle = app.title,
-            imageUrl = backgroundUrl,
+            imageUrl = heroUrl ?: backgroundUrl,
         )
     }
 
@@ -163,6 +174,7 @@ internal data class CachedListing(
         put("updated_display", updatedDisplay)
         put("updated_millis", updatedMillis)
         put("background", backgroundUrl)
+        put("hero", heroUrl ?: "")
         put("queried_at", queriedAt)
         put("missing", missing)
     }
@@ -178,8 +190,10 @@ internal data class CachedListing(
             updatedDisplay = json.optString("updated_display").ifBlank { null },
             updatedMillis = json.optLong("updated_millis").takeIf { it > 0L },
             backgroundUrl = json.optString("background").ifBlank { null },
+            heroUrl = json.optString("hero").ifBlank { null },
             queriedAt = json.optLong("queried_at"),
             missing = json.optBoolean("missing"),
+            hasHeroField = json.has("hero"),
         )
     }
 }
@@ -187,7 +201,7 @@ internal data class CachedListing(
 private fun PlayListing?.toCached(): CachedListing {
     val now = System.currentTimeMillis()
     if (this == null) {
-        return CachedListing(null, null, null, null, null, null, now, missing = true)
+        return CachedListing(null, null, null, null, null, null, null, now, missing = true)
     }
     return CachedListing(
         title = title,
@@ -196,6 +210,7 @@ private fun PlayListing?.toCached(): CachedListing {
         updatedDisplay = updatedDisplay,
         updatedMillis = updatedMillis,
         backgroundUrl = backgroundUrl,
+        heroUrl = heroUrl,
         queriedAt = now,
         missing = title.isNullOrBlank() && version.isNullOrBlank() && updatedDisplay.isNullOrBlank(),
     )
