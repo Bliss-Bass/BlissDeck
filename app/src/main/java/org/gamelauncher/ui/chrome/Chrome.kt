@@ -16,7 +16,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BatteryAlert
+import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.BatteryFull
+import androidx.compose.material.icons.filled.BatteryStd
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.GridView
@@ -27,6 +30,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,9 +42,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -72,13 +79,23 @@ fun TopStatusBar(
     searchQuery: String,
     onSearchQuery: (String) -> Unit,
     onToggleSearch: () -> Unit,
+    onUserMenu: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val status = rememberDeviceStatus()
+    val focusRequester = remember { FocusRequester() }
     var clock by remember { mutableStateOf(nowLabel()) }
     LaunchedEffect(Unit) {
         while (true) {
             clock = nowLabel()
             delay(15_000)
+        }
+    }
+    LaunchedEffect(searchOpen) {
+        if (searchOpen) {
+            delay(40)
+            runCatching { focusRequester.requestFocus() }
         }
     }
     Row(
@@ -108,11 +125,13 @@ fun TopStatusBar(
                     singleLine = true,
                     textStyle = TextStyle(color = Color(0xFF222222), fontSize = 16.sp),
                     cursorBrush = SolidColor(Color.Black),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(focusRequester),
                     decorationBox = { inner ->
                         if (searchQuery.isEmpty()) {
                             Text(
-                                "Search for games, genres, tags, or profiles…",
+                                "Search for games or apps…",
                                 color = Color(0xFF888888),
                                 fontSize = 16.sp,
                             )
@@ -120,28 +139,66 @@ fun TopStatusBar(
                         inner()
                     },
                 )
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Close search",
+                    tint = Color(0xFF4A4A4A),
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clickable(onClick = onToggleSearch),
+                )
             }
             Spacer(Modifier.width(16.dp))
         } else {
             Spacer(Modifier.weight(1f))
-            Icon(
-                Icons.Default.Search,
-                contentDescription = "Search",
-                tint = Color.White,
-                modifier = Modifier
-                    .size(28.dp)
-                    .clickable(onClick = onToggleSearch),
-            )
-            Spacer(Modifier.width(16.dp))
+            TopBarIcon(Icons.Default.Search, "Search", onClick = onToggleSearch)
+            Spacer(Modifier.width(8.dp))
         }
-        Icon(Icons.Default.Wifi, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.width(14.dp))
-        Icon(Icons.Default.BatteryFull, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+        TopBarIcon(
+            icon = if (status.wifiConnected) Icons.Default.Wifi else Icons.Default.WifiOff,
+            label = if (status.wifiConnected) "Wi-Fi connected" else "Wi-Fi",
+            onClick = { expandNotificationShade(context) },
+        )
+        Spacer(Modifier.width(4.dp))
+        TopBarIcon(
+            icon = batteryIcon(status),
+            label = "Battery ${status.batteryPercent}%",
+            onClick = { expandNotificationShade(context) },
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            clock,
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.clickable { expandNotificationShade(context) },
+        )
         Spacer(Modifier.width(12.dp))
-        Text(clock, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.width(16.dp))
-        DiamondMark(32.dp)
+        DiamondMark(
+            32.dp,
+            modifier = Modifier.clickable(onClick = onUserMenu),
+        )
     }
+}
+
+@Composable
+private fun TopBarIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Icon(
+        icon,
+        contentDescription = label,
+        tint = Color.White,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(6.dp)
+            .size(22.dp),
+    )
+}
+
+private fun batteryIcon(status: DeviceStatus) = when {
+    status.charging -> Icons.Default.BatteryChargingFull
+    status.batteryPercent <= 15 -> Icons.Default.BatteryAlert
+    status.batteryPercent >= 85 -> Icons.Default.BatteryFull
+    else -> Icons.Default.BatteryStd
 }
 
 @Composable

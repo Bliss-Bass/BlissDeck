@@ -6,18 +6,20 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import org.gamelauncher.data.ArtworkRepository
 import org.gamelauncher.data.InstalledCatalog
 import org.gamelauncher.data.LocalArtwork
@@ -27,8 +29,10 @@ import org.gamelauncher.ui.chrome.ApplySystemBarMode
 import org.gamelauncher.ui.chrome.CommandBar
 import org.gamelauncher.ui.chrome.CommandHints
 import org.gamelauncher.ui.chrome.DimScrim
+import org.gamelauncher.ui.chrome.SearchOverlay
 import org.gamelauncher.ui.chrome.SideMenu
 import org.gamelauncher.ui.chrome.TopStatusBar
+import org.gamelauncher.ui.chrome.UserMenu
 import org.gamelauncher.ui.chrome.rememberBottomChromeInsets
 import org.gamelauncher.ui.chrome.rememberFreeformWindow
 import org.gamelauncher.ui.chrome.rememberTopChromeInsets
@@ -54,6 +58,7 @@ fun LauncherApp(onClose: () -> Unit) {
         LaunchedEffect(snapshot) { newsRepo.refresh(snapshot) }
         var stack by remember { mutableStateOf(listOf<Screen>(Screen.Home)) }
         var menuOpen by remember { mutableStateOf(false) }
+        var userMenuOpen by remember { mutableStateOf(false) }
         var searchOpen by remember { mutableStateOf(false) }
         var searchQuery by remember { mutableStateOf("") }
         val current = stack.last()
@@ -61,11 +66,13 @@ fun LauncherApp(onClose: () -> Unit) {
         fun go(screen: Screen, clear: Boolean = false) {
             stack = if (clear) listOf(screen) else stack + screen
             menuOpen = false
+            userMenuOpen = false
         }
 
         fun back() {
             when {
                 menuOpen -> menuOpen = false
+                userMenuOpen -> userMenuOpen = false
                 searchOpen -> {
                     searchOpen = false
                     searchQuery = ""
@@ -80,7 +87,7 @@ fun LauncherApp(onClose: () -> Unit) {
             if (launch != null) context.startActivity(launch)
         }
 
-        BackHandler(enabled = menuOpen || searchOpen || stack.size > 1) { back() }
+        BackHandler(enabled = menuOpen || userMenuOpen || searchOpen || stack.size > 1) { back() }
 
         val hints = when {
             menuOpen -> CommandHints()
@@ -102,7 +109,17 @@ fun LauncherApp(onClose: () -> Unit) {
                 searchOpen = searchOpen,
                 searchQuery = searchQuery,
                 onSearchQuery = { searchQuery = it },
-                onToggleSearch = { searchOpen = !searchOpen },
+                onToggleSearch = {
+                    searchOpen = !searchOpen
+                    if (!searchOpen) searchQuery = ""
+                    userMenuOpen = false
+                },
+                onUserMenu = {
+                    userMenuOpen = !userMenuOpen
+                    searchOpen = false
+                    searchQuery = ""
+                    menuOpen = false
+                },
                 modifier = Modifier.windowInsetsPadding(rememberTopChromeInsets(freeform)),
             )
             Box(Modifier.weight(1f)) {
@@ -123,6 +140,27 @@ fun LauncherApp(onClose: () -> Unit) {
                         }
                     }
                 }
+                if (searchOpen) {
+                    SearchOverlay(snapshot, searchQuery) { id ->
+                        searchOpen = false
+                        searchQuery = ""
+                        go(Screen.Game(id))
+                    }
+                }
+                if (userMenuOpen) {
+                    DimScrim { userMenuOpen = false }
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(end = 12.dp, top = 8.dp),
+                    ) {
+                        UserMenu(
+                            onLauncherSettings = { go(Screen.Settings, clear = true) },
+                            onCloseLauncher = onClose,
+                            onDismiss = { userMenuOpen = false },
+                        )
+                    }
+                }
                 if (menuOpen) {
                     DimScrim { menuOpen = false }
                     Box(Modifier.align(Alignment.CenterStart)) {
@@ -141,7 +179,10 @@ fun LauncherApp(onClose: () -> Unit) {
             }
             CommandBar(
                 hints,
-                onMenu = { menuOpen = !menuOpen },
+                onMenu = {
+                    menuOpen = !menuOpen
+                    userMenuOpen = false
+                },
                 onBack = { back() },
                 modifier = Modifier.windowInsetsPadding(rememberBottomChromeInsets(freeform)),
             )
