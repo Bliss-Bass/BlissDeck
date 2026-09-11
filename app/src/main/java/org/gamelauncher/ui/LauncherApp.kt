@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import org.gamelauncher.data.ArtworkRepository
 import org.gamelauncher.data.InstalledCatalog
 import org.gamelauncher.data.LocalArtwork
+import org.gamelauncher.data.PlayNewsRepository
 import org.gamelauncher.data.findEntry
 import org.gamelauncher.ui.chrome.ApplySystemBarMode
 import org.gamelauncher.ui.chrome.CommandBar
@@ -45,6 +48,10 @@ fun LauncherApp(onClose: () -> Unit) {
         val context = LocalContext.current
         val snapshot = remember(context) { InstalledCatalog.load(context) }
         val artwork = remember(context) { ArtworkRepository(context) }
+        val newsRepo = remember(context) { PlayNewsRepository(context) }
+        val news by newsRepo.news.collectAsState()
+        val newsLoading by newsRepo.loading.collectAsState()
+        LaunchedEffect(snapshot) { newsRepo.refresh(snapshot) }
         var stack by remember { mutableStateOf(listOf<Screen>(Screen.Home)) }
         var menuOpen by remember { mutableStateOf(false) }
         var searchOpen by remember { mutableStateOf(false) }
@@ -100,7 +107,12 @@ fun LauncherApp(onClose: () -> Unit) {
             )
             Box(Modifier.weight(1f)) {
                 when (val screen = current) {
-                    Screen.Home -> HomeScreen(snapshot, onOpenGame = { go(Screen.Game(it)) })
+                    Screen.Home -> HomeScreen(
+                        snapshot,
+                        news = news,
+                        newsLoading = newsLoading,
+                        onOpenGame = { go(Screen.Game(it)) },
+                    )
                     Screen.Library -> LibraryScreen(snapshot, onOpenGame = { go(Screen.Game(it)) })
                     Screen.Store -> StoreScreen()
                     Screen.Settings -> SettingsScreen()

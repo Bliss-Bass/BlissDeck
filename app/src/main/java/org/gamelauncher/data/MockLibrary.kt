@@ -56,7 +56,6 @@ object MockLibrary {
             NewsItem(
                 id = "n1",
                 kind = "BUGFIX",
-                kindColorHue = 42f,
                 body = "Minor bug fixes. Bugs: the only thing that (almost) makes us angrier than the pigs.",
                 date = "8 September 2026",
                 version = "Skybound 26.6.0",
@@ -66,7 +65,6 @@ object MockLibrary {
             NewsItem(
                 id = "n2",
                 kind = "REGULAR UPDATE",
-                kindColorHue = 195f,
                 body = "Runtime and wrapper improvements for native titles.",
                 date = "24 August 2026",
                 version = "Neon Circuit 1.2.0",

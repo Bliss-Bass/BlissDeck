@@ -31,17 +31,19 @@ data class InstalledApp(
     val packageName: String,
     val coverHue: Float,
     val isGame: Boolean,
+    val lastUpdateTime: Long = 0L,
+    val versionName: String? = null,
 )
 
 data class NewsItem(
     val id: String,
     val kind: String,
-    val kindColorHue: Float,
     val body: String,
     val date: String,
     val version: String,
     val gameId: String,
     val gameTitle: String,
+    val imageUrl: String? = null,
 )
 
 data class Screenshot(

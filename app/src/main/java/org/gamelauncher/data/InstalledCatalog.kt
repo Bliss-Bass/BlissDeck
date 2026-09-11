@@ -68,13 +68,27 @@ private fun ResolveInfo.toInstalledApp(pm: PackageManager): InstalledApp {
     val packageName = activityInfo.packageName
     val title = loadLabel(pm).toString()
     val appInfo = activityInfo.applicationInfo
+    val pkgInfo = packageInfo(pm, packageName)
     return InstalledApp(
         id = packageName,
         title = title,
         packageName = packageName,
         coverHue = packageName.packageHue(),
         isGame = appInfo.isGameApp(),
+        lastUpdateTime = pkgInfo?.lastUpdateTime ?: 0L,
+        versionName = pkgInfo?.versionName,
     )
+}
+
+private fun packageInfo(pm: PackageManager, packageName: String): android.content.pm.PackageInfo? {
+    return runCatching {
+        if (Build.VERSION.SDK_INT >= 33) {
+            pm.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getPackageInfo(packageName, 0)
+        }
+    }.getOrNull()
 }
 
 private fun ApplicationInfo.isGameApp(): Boolean {
