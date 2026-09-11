@@ -81,8 +81,8 @@ class PlayNewsRepository(context: Context) {
     }
 
     private fun include(app: InstalledApp, listing: CachedListing, now: Long): Boolean {
-        if (app.isGame) return true
         if (isPlaySkipped(app.packageName)) return false
+        if (app.isGame) return true
         if ("launcher" in app.title.lowercase()) return false
         if (!looksLikeGame(app, listing)) return false
         if (listing.version.isNullOrBlank() || listing.whatsNew.isNullOrBlank()) return false
@@ -97,7 +97,7 @@ class PlayNewsRepository(context: Context) {
     }
 
     private fun fetchTargets(snapshot: LibrarySnapshot): List<InstalledApp> {
-        val games = snapshot.installed.filter { it.isGame }
+        val games = snapshot.installed.filter { it.isGame && !isPlaySkipped(it.packageName) }
         val others = snapshot.installed
             .filter { !it.isGame && !isPlaySkipped(it.packageName) }
             .sortedByDescending { it.lastUpdateTime }
@@ -221,5 +221,8 @@ internal fun isPlaySkipped(packageName: String): Boolean {
         packageName.startsWith("com.google.android.") ||
         packageName.startsWith("org.lineageos.") ||
         packageName.startsWith("org.blissroms.") ||
-        packageName.startsWith("org.blissos.")
+        packageName.startsWith("org.blissos.") ||
+        packageName.startsWith("app.gamenative.stub") ||
+        packageName == "app.gamenative.stubinstaller" ||
+        packageName.startsWith("com.bass.")
 }

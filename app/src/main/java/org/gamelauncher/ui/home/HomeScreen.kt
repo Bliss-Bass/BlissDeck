@@ -105,6 +105,7 @@ fun HomeScreen(
                     packageName = game.packageName,
                     isGame = game.inLibrary,
                     landscape = true,
+                    preferIcon = true,
                     modifier = Modifier
                         .width(if (wide) 340.dp else 170.dp)
                         .height(168.dp)
@@ -271,7 +272,7 @@ private fun NewsCard(
                         .clip(CircleShape)
                         .background(hueBrush(game.coverHue)),
                 ) {
-                    ArtworkLayer(artwork, landscape = false)
+                    ArtworkLayer(artwork, landscape = false, preferIcon = true)
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(item.gameTitle, color = TextPrimary, fontSize = 14.sp)
@@ -298,6 +299,7 @@ private fun RecommendedRow(apps: List<InstalledApp>, onOpenGame: (String) -> Uni
                         showTitle = true,
                         packageName = app.packageName,
                         isGame = app.isGame,
+                        preferIcon = true,
                         modifier = Modifier
                             .width(150.dp)
                             .height(210.dp)

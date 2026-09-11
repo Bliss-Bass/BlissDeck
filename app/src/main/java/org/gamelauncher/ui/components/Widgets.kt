@@ -89,6 +89,7 @@ fun CoverArt(
     packageName: String = "",
     isGame: Boolean = true,
     landscape: Boolean = false,
+    preferIcon: Boolean = false,
 ) {
     val artwork = if (packageName.isNotBlank()) {
         rememberArtwork(packageName, title, isGame)
@@ -102,7 +103,12 @@ fun CoverArt(
             .then(if (selected) Modifier.border(3.dp, TileBorder, shape) else Modifier)
             .background(hueBrush(hue, portrait = !landscape)),
     ) {
-        ArtworkLayer(artwork, landscape)
+        ArtworkLayer(
+            artwork,
+            landscape,
+            modifier = if (preferIcon) Modifier.padding(horizontal = 28.dp, vertical = 16.dp) else Modifier,
+            preferIcon = preferIcon,
+        )
         if (showTitle) {
             Text(
                 text = title,
@@ -120,8 +126,13 @@ fun CoverArt(
 }
 
 @Composable
-fun ArtworkLayer(artwork: Artwork, landscape: Boolean, modifier: Modifier = Modifier) {
-    val url = artwork.imageUrl(landscape)
+fun ArtworkLayer(
+    artwork: Artwork,
+    landscape: Boolean,
+    modifier: Modifier = Modifier,
+    preferIcon: Boolean = false,
+) {
+    val url = artwork.imageUrl(landscape).takeUnless { preferIcon }
     when {
         url != null -> AsyncImage(
             model = url,
@@ -129,7 +140,11 @@ fun ArtworkLayer(artwork: Artwork, landscape: Boolean, modifier: Modifier = Modi
             contentScale = ContentScale.Crop,
             modifier = modifier.fillMaxSize(),
         )
-        artwork.icon != null -> DrawableImage(artwork.icon, modifier.fillMaxSize())
+        artwork.icon != null -> DrawableImage(
+            artwork.icon,
+            modifier.fillMaxSize(),
+            contentScale = if (preferIcon) ContentScale.Fit else ContentScale.Crop,
+        )
         else -> Canvas(modifier.fillMaxSize()) {
             val mark = Path().apply {
                 val cx = size.width * 0.5f
@@ -147,7 +162,16 @@ fun ArtworkLayer(artwork: Artwork, landscape: Boolean, modifier: Modifier = Modi
 }
 
 @Composable
-private fun DrawableImage(drawable: Drawable, modifier: Modifier = Modifier) {
+fun AppIconImage(drawable: Drawable, modifier: Modifier = Modifier) {
+    DrawableImage(drawable, modifier, ContentScale.Crop)
+}
+
+@Composable
+private fun DrawableImage(
+    drawable: Drawable,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+) {
     val bitmap = remember(drawable) {
         val size = maxOf(drawable.intrinsicWidth, drawable.intrinsicHeight, 128)
         drawable.toBitmap(size, size)
@@ -155,7 +179,7 @@ private fun DrawableImage(drawable: Drawable, modifier: Modifier = Modifier) {
     Image(
         bitmap = bitmap.asImageBitmap(),
         contentDescription = null,
-        contentScale = ContentScale.Crop,
+        contentScale = contentScale,
         modifier = modifier,
     )
 }

@@ -17,6 +17,18 @@ internal data class SteamGridArt(
 )
 
 internal class SteamGridClient {
+    fun gameIdForSteamApp(apiKey: String, steamAppId: String): String? {
+        if (steamAppId.isBlank()) return null
+        val json = get(apiKey, "$BASE/games/steam/$steamAppId") ?: return null
+        json.optJSONObject("data")?.let { data ->
+            val id = data.optInt("id", -1)
+            return id.takeIf { it > 0 }?.toString()
+        }
+        val data = json.optJSONArray("data") ?: return null
+        val id = data.optJSONObject(0)?.optInt("id", -1) ?: return null
+        return id.takeIf { it > 0 }?.toString()
+    }
+
     fun search(apiKey: String, title: String): List<SteamGridHit> {
         val term = URLEncoder.encode(title.trim(), Charsets.UTF_8.name()).replace("+", "%20")
         if (term.isBlank()) return emptyList()

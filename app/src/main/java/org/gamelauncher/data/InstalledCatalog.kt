@@ -92,6 +92,9 @@ private fun packageInfo(pm: PackageManager, packageName: String): android.conten
 }
 
 private fun ApplicationInfo.isGameApp(): Boolean {
+    if (packageName == "app.gamenative") return true
+    if (packageName == "app.gamenative.stubinstaller") return false
+    if (SteamNative.isGameStub(packageName)) return true
     if (Build.VERSION.SDK_INT >= 26 && category == ApplicationInfo.CATEGORY_GAME) return true
     @Suppress("DEPRECATION")
     if (flags and ApplicationInfo.FLAG_IS_GAME != 0) return true

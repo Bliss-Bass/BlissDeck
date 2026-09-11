@@ -78,33 +78,49 @@ class ArtworkRepository(
                 val savedCover = prefs.getString(coverKey(packageName), null)
                 val savedHero = prefs.getString(heroKey(packageName), null)
                 val playHero = playNews?.heroUrl(packageName)
+                val steamAppId = SteamNative.steamAppId(packageName)
                 if (savedCover != null || savedHero != null) {
                     return@withLock Artwork(
                         packageName,
                         savedId,
-                        savedCover,
-                        savedHero ?: playHero,
+                        savedCover ?: steamAppId?.let(SteamNative::cdnCover),
+                        savedHero ?: playHero ?: steamAppId?.let(SteamNative::cdnHero),
                         icon,
                     ).also { memory[packageName] = it }
                 }
                 val key = apiKey
-                if (key.isBlank() || authFailed || (!isGame && savedId == null)) {
-                    return@withLock Artwork(packageName, savedId, null, playHero, icon).also {
-                        memory[packageName] = it
+                val wantsRemote = isGame || steamAppId != null || savedId != null
+                if (key.isNotBlank() && !authFailed && wantsRemote) {
+                    val resolved = runCatching {
+                        val id = savedId
+                            ?: steamAppId?.let { client.gameIdForSteamApp(key, it) }
+                            ?: matchId(key, title)
+                            ?: return@runCatching null
+                        val art = client.artwork(key, id)
+                        persist(packageName, id, art.coverUrl, art.heroUrl)
+                        Artwork(
+                            packageName,
+                            id,
+                            art.coverUrl ?: steamAppId?.let(SteamNative::cdnCover),
+                            art.heroUrl ?: playHero ?: steamAppId?.let(SteamNative::cdnHero),
+                            icon,
+                        )
+                    }.getOrElse { error ->
+                        if (error is SteamGridAuthException) authFailed = true
+                        null
+                    }
+                    if (resolved != null) {
+                        memory[packageName] = resolved
+                        return@withLock resolved
                     }
                 }
-                val resolved = runCatching {
-                    val id = savedId ?: matchId(key, title)
-                        ?: return@runCatching Artwork(packageName, null, null, playHero, icon)
-                    val art = client.artwork(key, id)
-                    persist(packageName, id, art.coverUrl, art.heroUrl)
-                    Artwork(packageName, id, art.coverUrl, art.heroUrl ?: playHero, icon)
-                }.getOrElse { error ->
-                    if (error is SteamGridAuthException) authFailed = true
-                    Artwork(packageName, savedId, null, playHero, icon)
-                }
-                memory[packageName] = resolved
-                resolved
+                Artwork(
+                    packageName,
+                    savedId,
+                    steamAppId?.let(SteamNative::cdnCover),
+                    playHero ?: steamAppId?.let(SteamNative::cdnHero),
+                    icon,
+                ).also { memory[packageName] = it }
             }
         }
 

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -61,6 +62,7 @@ import org.gamelauncher.data.GamePageTab
 import org.gamelauncher.data.GameSession
 import org.gamelauncher.data.LocalArtwork
 import org.gamelauncher.ui.components.AmbientBackdrop
+import org.gamelauncher.ui.components.AppIconImage
 import org.gamelauncher.ui.components.ArtworkLayer
 import org.gamelauncher.ui.components.CoverArt
 import org.gamelauncher.ui.components.ShoulderKey
@@ -139,6 +141,17 @@ private fun ActivityPage(
             contentAlignment = Alignment.Center,
         ) {
             ArtworkLayer(artwork, landscape = true)
+            artwork.icon?.let { icon ->
+                AppIconImage(
+                    icon,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 24.dp, bottom = 18.dp)
+                        .size(84.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(14.dp)),
+                )
+            }
             if (artwork.imageUrl(true) == null) {
                 Text(
                     game.title.uppercase(),
