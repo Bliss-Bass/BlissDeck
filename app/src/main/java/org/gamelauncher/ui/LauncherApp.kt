@@ -1,6 +1,5 @@
 package org.gamelauncher.ui
 
-import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -81,12 +80,6 @@ fun LauncherApp(onClose: () -> Unit) {
             }
         }
 
-        fun play(packageName: String) {
-            val launch = context.packageManager.getLaunchIntentForPackage(packageName)
-                ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            if (launch != null) context.startActivity(launch)
-        }
-
         BackHandler(enabled = menuOpen || userMenuOpen || searchOpen || stack.size > 1) { back() }
 
         val hints = when {
@@ -136,7 +129,7 @@ fun LauncherApp(onClose: () -> Unit) {
                     is Screen.Game -> {
                         val game = snapshot.findEntry(screen.id)
                         if (game != null) {
-                            GameScreen(game, onPlay = { play(game.packageName) })
+                            GameScreen(game)
                         }
                     }
                 }

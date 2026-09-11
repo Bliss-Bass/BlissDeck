@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -31,6 +32,8 @@ import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,14 +44,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
 import org.gamelauncher.data.Game
 import org.gamelauncher.data.GamePageTab
+import org.gamelauncher.data.GameSession
 import org.gamelauncher.data.LocalArtwork
 import org.gamelauncher.ui.components.AmbientBackdrop
 import org.gamelauncher.ui.components.ArtworkLayer
@@ -60,12 +70,13 @@ import org.gamelauncher.ui.components.rememberArtwork
 import org.gamelauncher.ui.theme.Background
 import org.gamelauncher.ui.theme.Footer
 import org.gamelauncher.ui.theme.PlayGreen
+import org.gamelauncher.ui.theme.StopRed
 import org.gamelauncher.ui.theme.TextMuted
 import org.gamelauncher.ui.theme.TextPrimary
 import org.gamelauncher.ui.theme.Tile
 
 @Composable
-fun GameScreen(game: Game, onPlay: () -> Unit) {
+fun GameScreen(game: Game) {
     var tab by remember { mutableStateOf(GamePageTab.Activity) }
     var favorite by remember { mutableStateOf(false) }
     val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
@@ -74,7 +85,7 @@ fun GameScreen(game: Game, onPlay: () -> Unit) {
         AmbientBackdrop(artwork)
         Column(Modifier.fillMaxSize()) {
             when (tab) {
-                GamePageTab.Activity -> ActivityPage(game, favorite, { favorite = !favorite }, { tab = it }, onPlay)
+                GamePageTab.Activity -> ActivityPage(game, favorite, { favorite = !favorite }, { tab = it })
                 GamePageTab.Community -> CommunityPage(game) { tab = it }
                 GamePageTab.GameInfo -> GameInfoPage(game) { tab = it }
             }
@@ -88,8 +99,36 @@ private fun ActivityPage(
     favorite: Boolean,
     onFavorite: () -> Unit,
     onTab: (GamePageTab) -> Unit,
-    onPlay: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var running by remember(game.packageName) { mutableStateOf(false) }
+    val mapperInstalled = remember { GameSession.hasXtMapper(context) }
+
+    fun refreshRunning() {
+        when (val observed = GameSession.running(context, game.packageName)) {
+            true -> running = true
+            false -> running = false
+            null -> Unit
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, game.packageName) {
+        refreshRunning()
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) refreshRunning()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(game.packageName) {
+        while (true) {
+            delay(1500)
+            refreshRunning()
+        }
+    }
+
     Column(Modifier.fillMaxSize()) {
         val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
         Box(
@@ -122,14 +161,32 @@ private fun ActivityPage(
                     .width(240.dp)
                     .height(56.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(PlayGreen)
-                    .clickable(onClick = onPlay)
+                    .background(if (running) StopRed else PlayGreen)
+                    .clickable {
+                        if (running) {
+                            GameSession.close(context, game.packageName)
+                            running = false
+                        } else if (GameSession.launch(context, game.packageName)) {
+                            running = true
+                        }
+                    }
+                    .semantics { contentDescription = if (running) "Close" else "Play" }
                     .padding(horizontal = 18.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+                Icon(
+                    imageVector = if (running) Icons.Default.Close else Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(32.dp),
+                )
                 Spacer(Modifier.width(8.dp))
-                Text("Play", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (running) "Close" else "Play",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
             Spacer(Modifier.width(28.dp))
             Stat("Last Played", game.lastPlayed)
@@ -150,11 +207,20 @@ private fun ActivityPage(
                 }
             }
             Spacer(Modifier.weight(1f))
-            Glyph(Icons.Default.SportsEsports)
+            Glyph(
+                Icons.Default.SportsEsports,
+                onClick = { GameSession.openXtMapper(context) },
+                filled = mapperInstalled,
+                description = "Open XTMapper",
+            )
             Spacer(Modifier.width(10.dp))
-            Glyph(Icons.Default.Settings)
+            Glyph(
+                Icons.Default.Settings,
+                onClick = { GameSession.openAppInfo(context, game.packageName) },
+                description = "App info",
+            )
             Spacer(Modifier.width(10.dp))
-            Glyph(Icons.Default.Star, onClick = onFavorite, filled = favorite)
+            Glyph(Icons.Default.Star, onClick = onFavorite, filled = favorite, description = "Favorite")
         }
         Spacer(Modifier.height(20.dp))
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -408,13 +474,15 @@ private fun Glyph(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit = {},
     filled: Boolean = true,
+    description: String? = null,
 ) {
     Box(
         modifier = Modifier
             .size(52.dp)
             .clip(RoundedCornerShape(4.dp))
             .background(Tile)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .then(if (description != null) Modifier.semantics { contentDescription = description } else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = null, tint = if (filled) TextPrimary else TextMuted, modifier = Modifier.size(26.dp))
