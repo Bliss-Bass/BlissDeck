@@ -1,5 +1,8 @@
 package org.gamelauncher.ui.game
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -36,17 +39,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
 import org.gamelauncher.data.Game
 import org.gamelauncher.data.GamePageTab
+import org.gamelauncher.data.LocalArtwork
+import org.gamelauncher.ui.components.AmbientBackdrop
+import org.gamelauncher.ui.components.ArtworkLayer
 import org.gamelauncher.ui.components.CoverArt
 import org.gamelauncher.ui.components.ShoulderKey
 import org.gamelauncher.ui.components.SteamPill
 import org.gamelauncher.ui.components.hueBrush
+import org.gamelauncher.ui.components.rememberArtwork
 import org.gamelauncher.ui.theme.Background
 import org.gamelauncher.ui.theme.Footer
 import org.gamelauncher.ui.theme.PlayGreen
@@ -55,15 +65,19 @@ import org.gamelauncher.ui.theme.TextPrimary
 import org.gamelauncher.ui.theme.Tile
 
 @Composable
-fun GameScreen(game: Game) {
+fun GameScreen(game: Game, onPlay: () -> Unit) {
     var tab by remember { mutableStateOf(GamePageTab.Activity) }
     var favorite by remember { mutableStateOf(false) }
+    val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
 
-    Column(Modifier.fillMaxSize().background(Background)) {
-        when (tab) {
-            GamePageTab.Activity -> ActivityPage(game, favorite, { favorite = !favorite }, { tab = it })
-            GamePageTab.Community -> CommunityPage(game) { tab = it }
-            GamePageTab.GameInfo -> GameInfoPage(game) { tab = it }
+    Box(Modifier.fillMaxSize()) {
+        AmbientBackdrop(artwork)
+        Column(Modifier.fillMaxSize()) {
+            when (tab) {
+                GamePageTab.Activity -> ActivityPage(game, favorite, { favorite = !favorite }, { tab = it }, onPlay)
+                GamePageTab.Community -> CommunityPage(game) { tab = it }
+                GamePageTab.GameInfo -> GameInfoPage(game) { tab = it }
+            }
         }
     }
 }
@@ -74,8 +88,10 @@ private fun ActivityPage(
     favorite: Boolean,
     onFavorite: () -> Unit,
     onTab: (GamePageTab) -> Unit,
+    onPlay: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
+        val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -83,13 +99,16 @@ private fun ActivityPage(
                 .background(hueBrush(game.coverHue, portrait = false)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                game.title.uppercase(),
-                color = Color.White,
-                fontSize = 42.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 2.sp,
-            )
+            ArtworkLayer(artwork, landscape = true)
+            if (artwork.imageUrl(true) == null) {
+                Text(
+                    game.title.uppercase(),
+                    color = Color.White,
+                    fontSize = 42.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 2.sp,
+                )
+            }
         }
         Row(
             modifier = Modifier
@@ -104,7 +123,7 @@ private fun ActivityPage(
                     .height(56.dp)
                     .clip(RoundedCornerShape(2.dp))
                     .background(PlayGreen)
-                    .clickable { }
+                    .clickable(onClick = onPlay)
                     .padding(horizontal = 18.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -164,6 +183,7 @@ private fun ActivityPage(
 
 @Composable
 private fun CommunityPage(game: Game, onTab: (GamePageTab) -> Unit) {
+    val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
     Column(
         Modifier
             .fillMaxSize()
@@ -189,14 +209,24 @@ private fun CommunityPage(game: Game, onTab: (GamePageTab) -> Unit) {
             modifier = Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            listOf(game.coverHue, game.coverHue + 30f, game.coverHue + 70f).forEach { hue ->
+            listOf(0, 1, 2).forEach { index ->
+                val url = artwork.heroUrl ?: artwork.coverUrl
                 Box(
                     modifier = Modifier
                         .width(320.dp)
                         .height(200.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(hueBrush(hue, portrait = false)),
-                )
+                        .background(hueBrush(game.coverHue + index * 30f, portrait = false)),
+                ) {
+                    if (url != null) {
+                        AsyncImage(
+                            model = url,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
             }
         }
     }
@@ -204,8 +234,11 @@ private fun CommunityPage(game: Game, onTab: (GamePageTab) -> Unit) {
 
 @Composable
 private fun GameInfoPage(game: Game, onTab: (GamePageTab) -> Unit) {
+    val context = LocalContext.current
+    val repo = LocalArtwork.current
     var showChangeId by remember { mutableStateOf(false) }
-    var steamId by remember { mutableStateOf(game.steamGridId.orEmpty()) }
+    val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
+    val steamId = artwork.steamGridId.orEmpty()
 
     Column(
         Modifier
@@ -216,7 +249,13 @@ private fun GameInfoPage(game: Game, onTab: (GamePageTab) -> Unit) {
         ShoulderTabs(GamePageTab.GameInfo, onTab)
         Spacer(Modifier.height(28.dp))
         Row(Modifier.fillMaxWidth()) {
-            CoverArt(game.title, game.coverHue, modifier = Modifier.width(150.dp).height(220.dp))
+            CoverArt(
+                game.title,
+                game.coverHue,
+                packageName = game.packageName,
+                isGame = game.inLibrary,
+                modifier = Modifier.width(150.dp).height(220.dp),
+            )
             Spacer(Modifier.width(22.dp))
             Column(Modifier.weight(1f)) {
                 Text(game.title, color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
@@ -261,11 +300,16 @@ private fun GameInfoPage(game: Game, onTab: (GamePageTab) -> Unit) {
             Spacer(Modifier.width(12.dp))
             Text("ID ${steamId.ifBlank { "—" }}", color = TextMuted, fontSize = 14.sp)
             Spacer(Modifier.weight(1f))
-            InfoAction("View Page")
+            InfoAction("View Page") {
+                val id = steamId.ifBlank { return@InfoAction }
+                openUrl(context, "https://www.steamgriddb.com/game/$id")
+            }
             Spacer(Modifier.width(10.dp))
             InfoAction("Change ID") { showChangeId = true }
             Spacer(Modifier.width(10.dp))
-            InfoAction("Store Page")
+            InfoAction("Store Page") {
+                openUrl(context, "https://play.google.com/store/apps/details?id=${game.packageName}")
+            }
         }
         Spacer(Modifier.height(16.dp))
         Text(game.packageName, color = TextMuted, fontSize = 15.sp)
@@ -278,7 +322,7 @@ private fun GameInfoPage(game: Game, onTab: (GamePageTab) -> Unit) {
                 current = steamId,
                 onDismiss = { showChangeId = false },
                 onSave = {
-                    steamId = it
+                    repo.setSteamGridId(game.packageName, it)
                     showChangeId = false
                 },
             )
@@ -395,5 +439,13 @@ private fun InfoAction(label: String, onClick: () -> Unit = {}) {
             .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
         Text(label, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+private fun openUrl(context: Context, url: String) {
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
     }
 }

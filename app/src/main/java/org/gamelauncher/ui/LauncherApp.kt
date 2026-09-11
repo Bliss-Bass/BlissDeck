@@ -1,25 +1,34 @@
 package org.gamelauncher.ui
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import org.gamelauncher.data.MockLibrary
+import androidx.compose.ui.platform.LocalContext
+import org.gamelauncher.data.ArtworkRepository
+import org.gamelauncher.data.InstalledCatalog
+import org.gamelauncher.data.LocalArtwork
+import org.gamelauncher.data.findEntry
+import org.gamelauncher.ui.chrome.ApplySystemBarMode
 import org.gamelauncher.ui.chrome.CommandBar
 import org.gamelauncher.ui.chrome.CommandHints
 import org.gamelauncher.ui.chrome.DimScrim
 import org.gamelauncher.ui.chrome.SideMenu
 import org.gamelauncher.ui.chrome.TopStatusBar
+import org.gamelauncher.ui.chrome.rememberBottomChromeInsets
+import org.gamelauncher.ui.chrome.rememberFreeformWindow
+import org.gamelauncher.ui.chrome.rememberTopChromeInsets
 import org.gamelauncher.ui.game.GameScreen
 import org.gamelauncher.ui.home.HomeScreen
 import org.gamelauncher.ui.library.LibraryScreen
@@ -33,7 +42,9 @@ import org.gamelauncher.ui.theme.GameLauncherTheme
 @Composable
 fun LauncherApp(onClose: () -> Unit) {
     GameLauncherTheme {
-        val snapshot = remember { MockLibrary.snapshot }
+        val context = LocalContext.current
+        val snapshot = remember(context) { InstalledCatalog.load(context) }
+        val artwork = remember(context) { ArtworkRepository(context) }
         var stack by remember { mutableStateOf(listOf<Screen>(Screen.Home)) }
         var menuOpen by remember { mutableStateOf(false) }
         var searchOpen by remember { mutableStateOf(false) }
@@ -56,6 +67,12 @@ fun LauncherApp(onClose: () -> Unit) {
             }
         }
 
+        fun play(packageName: String) {
+            val launch = context.packageManager.getLaunchIntentForPackage(packageName)
+                ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (launch != null) context.startActivity(launch)
+        }
+
         BackHandler(enabled = menuOpen || searchOpen || stack.size > 1) { back() }
 
         val hints = when {
@@ -65,18 +82,21 @@ fun LauncherApp(onClose: () -> Unit) {
             else -> CommandHints()
         }
 
+        val freeform = rememberFreeformWindow()
+        ApplySystemBarMode(freeform)
+
+        CompositionLocalProvider(LocalArtwork provides artwork) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Background)
-                .statusBarsPadding()
-                .navigationBarsPadding(),
+                .background(Background),
         ) {
             TopStatusBar(
                 searchOpen = searchOpen,
                 searchQuery = searchQuery,
                 onSearchQuery = { searchQuery = it },
                 onToggleSearch = { searchOpen = !searchOpen },
+                modifier = Modifier.windowInsetsPadding(rememberTopChromeInsets(freeform)),
             )
             Box(Modifier.weight(1f)) {
                 when (val screen = current) {
@@ -84,7 +104,12 @@ fun LauncherApp(onClose: () -> Unit) {
                     Screen.Library -> LibraryScreen(snapshot, onOpenGame = { go(Screen.Game(it)) })
                     Screen.Store -> StoreScreen()
                     Screen.Settings -> SettingsScreen()
-                    is Screen.Game -> GameScreen(MockLibrary.game(screen.id))
+                    is Screen.Game -> {
+                        val game = snapshot.findEntry(screen.id)
+                        if (game != null) {
+                            GameScreen(game, onPlay = { play(game.packageName) })
+                        }
+                    }
                 }
                 if (menuOpen) {
                     DimScrim { menuOpen = false }
@@ -102,7 +127,13 @@ fun LauncherApp(onClose: () -> Unit) {
                     }
                 }
             }
-            CommandBar(hints, onMenu = { menuOpen = !menuOpen }, onBack = { back() })
+            CommandBar(
+                hints,
+                onMenu = { menuOpen = !menuOpen },
+                onBack = { back() },
+                modifier = Modifier.windowInsetsPadding(rememberBottomChromeInsets(freeform)),
+            )
+        }
         }
     }
 }

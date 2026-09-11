@@ -40,11 +40,14 @@ import org.gamelauncher.data.HomeFeedTab
 import org.gamelauncher.data.InstalledApp
 import org.gamelauncher.data.LibrarySnapshot
 import org.gamelauncher.data.NewsItem
+import org.gamelauncher.data.toGame
+import org.gamelauncher.ui.components.AmbientBackdrop
 import org.gamelauncher.ui.components.AppIconTile
 import org.gamelauncher.ui.components.CoverArt
 import org.gamelauncher.ui.components.ShoulderKey
 import org.gamelauncher.ui.components.SteamPill
 import org.gamelauncher.ui.components.hueBrush
+import org.gamelauncher.ui.components.rememberArtwork
 import org.gamelauncher.ui.theme.Background
 import org.gamelauncher.ui.theme.PlayGreen
 import org.gamelauncher.ui.theme.TextMuted
@@ -57,22 +60,28 @@ fun HomeScreen(
     snapshot: LibrarySnapshot,
     onOpenGame: (String) -> Unit,
 ) {
-    val recents = snapshot.libraryGames
+    val recents = snapshot.libraryGames.ifEmpty {
+        snapshot.installed.take(8).map { it.toGame() }
+    }
+    if (recents.isEmpty()) {
+        Box(Modifier.fillMaxSize().background(Background), contentAlignment = Alignment.Center) {
+            Text("No installed apps found", color = TextMuted, fontSize = 16.sp)
+        }
+        return
+    }
     var selectedId by remember { mutableStateOf(recents.first().id) }
     var feed by remember { mutableStateOf(HomeFeedTab.WhatsNew) }
-    val selected = recents.first { it.id == selectedId }
+    val selected = recents.firstOrNull { it.id == selectedId } ?: recents.first()
+    val selectedArt = rememberArtwork(selected.packageName, selected.title, selected.inLibrary)
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color.hsl(selected.coverHue, 0.35f, 0.28f), Background),
-                ),
-            )
-            .verticalScroll(rememberScrollState())
-            .padding(start = 28.dp, end = 28.dp, top = 18.dp, bottom = 12.dp),
-    ) {
+    Box(Modifier.fillMaxSize()) {
+        AmbientBackdrop(selectedArt)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 28.dp, end = 28.dp, top = 18.dp, bottom = 12.dp),
+        ) {
         Text("Recent games", color = TextPrimary, fontSize = 18.sp)
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -82,11 +91,15 @@ fun HomeScreen(
                     title = game.title,
                     hue = game.coverHue,
                     selected = wide,
+                    showTitle = true,
+                    packageName = game.packageName,
+                    isGame = game.inLibrary,
+                    landscape = true,
                     modifier = Modifier
                         .width(if (wide) 420.dp else 210.dp)
                         .height(210.dp)
                         .clickable {
-                            selectedId = game.id
+                            if (selectedId == game.id) onOpenGame(game.id) else selectedId = game.id
                         },
                 )
             }
@@ -107,9 +120,13 @@ fun HomeScreen(
         FeedTabs(feed) { feed = it }
         Spacer(Modifier.height(16.dp))
         when (feed) {
-            HomeFeedTab.WhatsNew -> WhatsNewRow(snapshot.news, snapshot.games, onOpenGame)
+            HomeFeedTab.WhatsNew -> {
+                if (snapshot.news.isEmpty()) EmptyCenter("No news yet")
+                else WhatsNewRow(snapshot.news, snapshot.games, onOpenGame)
+            }
             HomeFeedTab.Favorites -> EmptyCenter("No favorites yet")
             HomeFeedTab.Recommended -> RecommendedRow(snapshot.installed, onOpenGame)
+        }
         }
     }
 }
@@ -146,7 +163,7 @@ private fun WhatsNewRow(
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         news.forEachIndexed { index, item ->
-            val game = games.first { it.id == item.gameId }
+            val game = games.firstOrNull { it.id == item.gameId } ?: return@forEachIndexed
             NewsCard(item, game, selected = index == 0) { onOpenGame(item.gameId) }
         }
     }
@@ -226,6 +243,9 @@ private fun RecommendedRow(apps: List<InstalledApp>, onOpenGame: (String) -> Uni
                     CoverArt(
                         title = app.title,
                         hue = app.coverHue,
+                        showTitle = true,
+                        packageName = app.packageName,
+                        isGame = app.isGame,
                         modifier = Modifier
                             .width(150.dp)
                             .height(210.dp)
@@ -235,9 +255,11 @@ private fun RecommendedRow(apps: List<InstalledApp>, onOpenGame: (String) -> Uni
                     AppIconTile(
                         title = app.title,
                         hue = app.coverHue,
+                        packageName = app.packageName,
                         modifier = Modifier
                             .width(150.dp)
                             .height(210.dp),
+                        onClick = { onOpenGame(app.id) },
                     )
                 }
             }

@@ -72,6 +72,7 @@ fun TopStatusBar(
     searchQuery: String,
     onSearchQuery: (String) -> Unit,
     onToggleSearch: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var clock by remember { mutableStateOf(nowLabel()) }
     LaunchedEffect(Unit) {
@@ -83,8 +84,9 @@ fun TopStatusBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
             .background(TopBar)
+            .then(modifier)
+            .height(52.dp)
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -147,12 +149,14 @@ fun CommandBar(
     hints: CommandHints,
     onMenu: () -> Unit,
     onBack: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
             .background(Footer)
+            .then(modifier)
+            .height(56.dp)
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

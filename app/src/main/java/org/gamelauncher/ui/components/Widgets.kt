@@ -1,6 +1,8 @@
 package org.gamelauncher.ui.components
 
+import android.graphics.drawable.Drawable
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +19,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,12 +30,19 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
+import coil.compose.AsyncImage
+import org.gamelauncher.data.Artwork
+import org.gamelauncher.data.LocalArtwork
 import org.gamelauncher.ui.theme.Pill
 import org.gamelauncher.ui.theme.TextMuted
 import org.gamelauncher.ui.theme.TextPrimary
@@ -49,33 +62,47 @@ fun hueBrush(hue: Float, portrait: Boolean = true): Brush {
 }
 
 @Composable
+fun rememberArtwork(
+    packageName: String,
+    title: String,
+    isGame: Boolean,
+): Artwork {
+    val repo = LocalArtwork.current
+    val epoch by repo.epoch.collectAsState()
+    val icon = remember(packageName) { repo.iconFor(packageName) }
+    val placeholder = remember(packageName, icon) {
+        Artwork(packageName, repo.steamGridId(packageName), null, null, icon)
+    }
+    val art by produceState(placeholder, packageName, title, isGame, epoch) {
+        value = repo.resolve(packageName, title, isGame)
+    }
+    return art
+}
+
+@Composable
 fun CoverArt(
     title: String,
     hue: Float,
     modifier: Modifier = Modifier,
     selected: Boolean = false,
     showTitle: Boolean = false,
+    packageName: String = "",
+    isGame: Boolean = true,
+    landscape: Boolean = false,
 ) {
+    val artwork = if (packageName.isNotBlank()) {
+        rememberArtwork(packageName, title, isGame)
+    } else {
+        Artwork("", null, null, null, null)
+    }
     val shape = RoundedCornerShape(2.dp)
     Box(
         modifier = modifier
             .clip(shape)
             .then(if (selected) Modifier.border(3.dp, TileBorder, shape) else Modifier)
-            .background(hueBrush(hue)),
+            .background(hueBrush(hue, portrait = !landscape)),
     ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val mark = Path().apply {
-                val cx = size.width * 0.5f
-                val cy = size.height * 0.42f
-                val r = size.minDimension * 0.18f
-                moveTo(cx, cy - r)
-                lineTo(cx + r, cy)
-                lineTo(cx, cy + r)
-                lineTo(cx - r, cy)
-                close()
-            }
-            drawPath(mark, Color.White.copy(alpha = 0.88f), style = Fill)
-        }
+        ArtworkLayer(artwork, landscape)
         if (showTitle) {
             Text(
                 text = title,
@@ -93,11 +120,53 @@ fun CoverArt(
 }
 
 @Composable
+fun ArtworkLayer(artwork: Artwork, landscape: Boolean, modifier: Modifier = Modifier) {
+    val url = artwork.imageUrl(landscape)
+    when {
+        url != null -> AsyncImage(
+            model = url,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier.fillMaxSize(),
+        )
+        artwork.icon != null -> DrawableImage(artwork.icon, modifier.fillMaxSize())
+        else -> Canvas(modifier.fillMaxSize()) {
+            val mark = Path().apply {
+                val cx = size.width * 0.5f
+                val cy = size.height * 0.42f
+                val r = size.minDimension * 0.18f
+                moveTo(cx, cy - r)
+                lineTo(cx + r, cy)
+                lineTo(cx, cy + r)
+                lineTo(cx - r, cy)
+                close()
+            }
+            drawPath(mark, Color.White.copy(alpha = 0.88f), style = Fill)
+        }
+    }
+}
+
+@Composable
+private fun DrawableImage(drawable: Drawable, modifier: Modifier = Modifier) {
+    val bitmap = remember(drawable) {
+        val size = maxOf(drawable.intrinsicWidth, drawable.intrinsicHeight, 128)
+        drawable.toBitmap(size, size)
+    }
+    Image(
+        bitmap = bitmap.asImageBitmap(),
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = modifier,
+    )
+}
+
+@Composable
 fun AppIconTile(
     title: String,
     hue: Float,
     modifier: Modifier = Modifier,
     selected: Boolean = false,
+    packageName: String = "",
     onClick: () -> Unit = {},
 ) {
     val shape = RoundedCornerShape(4.dp)
@@ -117,12 +186,21 @@ fun AppIconTile(
                 .background(hueBrush(hue)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = title.take(1).uppercase(),
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 28.sp,
-            )
+            val artwork = if (packageName.isNotBlank()) {
+                rememberArtwork(packageName, title, isGame = false)
+            } else {
+                null
+            }
+            if (artwork?.icon != null) {
+                DrawableImage(artwork.icon, Modifier.fillMaxSize())
+            } else {
+                Text(
+                    text = title.take(1).uppercase(),
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 28.sp,
+                )
+            }
         }
         Spacer(Modifier.height(10.dp))
         Text(

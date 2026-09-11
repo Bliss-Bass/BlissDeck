@@ -87,6 +87,9 @@ fun LibraryScreen(
                     CoverArt(
                         title = game.title,
                         hue = game.coverHue,
+                        showTitle = true,
+                        packageName = game.packageName,
+                        isGame = true,
                         modifier = Modifier
                             .height(230.dp)
                             .clickable { onOpenGame(game.id) },
@@ -104,6 +107,9 @@ fun LibraryScreen(
                         CoverArt(
                             title = app.title,
                             hue = app.coverHue,
+                            showTitle = true,
+                            packageName = app.packageName,
+                            isGame = true,
                             modifier = Modifier
                                 .height(210.dp)
                                 .clickable { onOpenGame(app.id) },
@@ -112,7 +118,9 @@ fun LibraryScreen(
                         AppIconTile(
                             title = app.title,
                             hue = app.coverHue,
+                            packageName = app.packageName,
                             modifier = Modifier.height(210.dp),
+                            onClick = { onOpenGame(app.id) },
                         )
                     }
                 }
