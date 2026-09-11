@@ -1,0 +1,12 @@
+apks/
+screenshots/
+.gradle/
+**/build/
+local.properties
+*.iml
+.idea/
+.DS_Store
+captures/
+.cxx/
+app/release/
+app/debug/

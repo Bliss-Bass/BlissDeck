@@ -1,0 +1,59 @@
+package org.gamelauncher.data
+
+enum class LibraryTab { AllGames, Installed, Friends, Collections }
+
+enum class HomeFeedTab { WhatsNew, Favorites, Recommended }
+
+enum class GamePageTab { Activity, Community, GameInfo }
+
+data class Game(
+    val id: String,
+    val title: String,
+    val packageName: String,
+    val inLibrary: Boolean,
+    val lastPlayed: String,
+    val playTime: String,
+    val rating: Float,
+    val steamGridId: String?,
+    val summary: String,
+    val developer: String,
+    val publisher: String,
+    val category: String,
+    val releaseDate: String,
+    val players: String,
+    val controller: String,
+    val coverHue: Float,
+)
+
+data class InstalledApp(
+    val id: String,
+    val title: String,
+    val packageName: String,
+    val coverHue: Float,
+    val isGame: Boolean,
+)
+
+data class NewsItem(
+    val id: String,
+    val kind: String,
+    val kindColorHue: Float,
+    val body: String,
+    val date: String,
+    val version: String,
+    val gameId: String,
+    val gameTitle: String,
+)
+
+data class Screenshot(
+    val id: String,
+    val caption: String,
+    val hue: Float,
+)
+
+data class LibrarySnapshot(
+    val games: List<Game>,
+    val installed: List<InstalledApp>,
+    val news: List<NewsItem>,
+) {
+    val libraryGames: List<Game> get() = games.filter { it.inLibrary }
+}

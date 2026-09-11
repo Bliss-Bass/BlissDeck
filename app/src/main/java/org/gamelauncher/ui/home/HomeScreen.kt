@@ -1,0 +1,258 @@
+package org.gamelauncher.ui.home
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import org.gamelauncher.data.Game
+import org.gamelauncher.data.HomeFeedTab
+import org.gamelauncher.data.InstalledApp
+import org.gamelauncher.data.LibrarySnapshot
+import org.gamelauncher.data.NewsItem
+import org.gamelauncher.ui.components.AppIconTile
+import org.gamelauncher.ui.components.CoverArt
+import org.gamelauncher.ui.components.ShoulderKey
+import org.gamelauncher.ui.components.SteamPill
+import org.gamelauncher.ui.components.hueBrush
+import org.gamelauncher.ui.theme.Background
+import org.gamelauncher.ui.theme.PlayGreen
+import org.gamelauncher.ui.theme.TextMuted
+import org.gamelauncher.ui.theme.TextPrimary
+import org.gamelauncher.ui.theme.Tile
+import org.gamelauncher.ui.theme.TileBorder
+
+@Composable
+fun HomeScreen(
+    snapshot: LibrarySnapshot,
+    onOpenGame: (String) -> Unit,
+) {
+    val recents = snapshot.libraryGames
+    var selectedId by remember { mutableStateOf(recents.first().id) }
+    var feed by remember { mutableStateOf(HomeFeedTab.WhatsNew) }
+    val selected = recents.first { it.id == selectedId }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color.hsl(selected.coverHue, 0.35f, 0.28f), Background),
+                ),
+            )
+            .verticalScroll(rememberScrollState())
+            .padding(start = 28.dp, end = 28.dp, top = 18.dp, bottom = 12.dp),
+    ) {
+        Text("Recent games", color = TextPrimary, fontSize = 18.sp)
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            recents.forEach { game ->
+                val wide = game.id == selectedId
+                CoverArt(
+                    title = game.title,
+                    hue = game.coverHue,
+                    selected = wide,
+                    modifier = Modifier
+                        .width(if (wide) 420.dp else 210.dp)
+                        .height(210.dp)
+                        .clickable {
+                            selectedId = game.id
+                        },
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(selected.title, color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = PlayGreen)
+            Text(
+                "PLAY NOW!",
+                color = PlayGreen,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                modifier = Modifier.clickable { onOpenGame(selected.id) },
+            )
+        }
+        Spacer(Modifier.height(28.dp))
+        FeedTabs(feed) { feed = it }
+        Spacer(Modifier.height(16.dp))
+        when (feed) {
+            HomeFeedTab.WhatsNew -> WhatsNewRow(snapshot.news, snapshot.games, onOpenGame)
+            HomeFeedTab.Favorites -> EmptyCenter("No favorites yet")
+            HomeFeedTab.Recommended -> RecommendedRow(snapshot.installed, onOpenGame)
+        }
+    }
+}
+
+@Composable
+private fun FeedTabs(selected: HomeFeedTab, onSelect: (HomeFeedTab) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ShoulderKey("L1") {
+            val values = HomeFeedTab.entries
+            onSelect(values[(selected.ordinal - 1 + values.size) % values.size])
+        }
+        Spacer(Modifier.weight(1f))
+        SteamPill("What's New", selected == HomeFeedTab.WhatsNew) { onSelect(HomeFeedTab.WhatsNew) }
+        Spacer(Modifier.width(28.dp))
+        SteamPill("Favorites", selected == HomeFeedTab.Favorites) { onSelect(HomeFeedTab.Favorites) }
+        Spacer(Modifier.width(28.dp))
+        SteamPill("Recommended", selected == HomeFeedTab.Recommended) { onSelect(HomeFeedTab.Recommended) }
+        Spacer(Modifier.weight(1f))
+        ShoulderKey("R1") {
+            val values = HomeFeedTab.entries
+            onSelect(values[(selected.ordinal + 1) % values.size])
+        }
+    }
+}
+
+@Composable
+private fun WhatsNewRow(
+    news: List<NewsItem>,
+    games: List<Game>,
+    onOpenGame: (String) -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        news.forEachIndexed { index, item ->
+            val game = games.first { it.id == item.gameId }
+            NewsCard(item, game, selected = index == 0) { onOpenGame(item.gameId) }
+        }
+    }
+}
+
+@Composable
+private fun NewsCard(
+    item: NewsItem,
+    game: Game,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(4.dp)
+    Column(
+        modifier = Modifier
+            .width(360.dp)
+            .clip(shape)
+            .then(if (selected) Modifier.border(2.dp, TileBorder, shape) else Modifier)
+            .background(Tile)
+            .clickable(onClick = onClick),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(150.dp)
+                .background(hueBrush(game.coverHue, portrait = false)),
+        ) {
+            Text(
+                item.kind,
+                color = Color.hsl(item.kindColorHue, 0.55f, 0.62f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(12.dp),
+            )
+            Text(
+                item.body,
+                color = TextPrimary,
+                fontSize = 15.sp,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(12.dp),
+            )
+        }
+        Column(Modifier.padding(16.dp)) {
+            Text(item.date, color = TextMuted, fontSize = 14.sp)
+            Spacer(Modifier.height(6.dp))
+            Text(item.version, color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .width(22.dp)
+                        .height(22.dp)
+                        .clip(CircleShape)
+                        .background(hueBrush(game.coverHue)),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(item.gameTitle, color = TextPrimary, fontSize = 14.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecommendedRow(apps: List<InstalledApp>, onOpenGame: (String) -> Unit) {
+    Column {
+        Text("Play next from your library", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+        Text("Players like you love these unplayed games in your library", color = TextMuted, fontSize = 14.sp)
+        Spacer(Modifier.height(16.dp))
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            apps.forEach { app ->
+                if (app.isGame) {
+                    CoverArt(
+                        title = app.title,
+                        hue = app.coverHue,
+                        modifier = Modifier
+                            .width(150.dp)
+                            .height(210.dp)
+                            .clickable { onOpenGame(app.id) },
+                    )
+                } else {
+                    AppIconTile(
+                        title = app.title,
+                        hue = app.coverHue,
+                        modifier = Modifier
+                            .width(150.dp)
+                            .height(210.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyCenter(message: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(260.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(message, color = TextMuted, fontSize = 16.sp)
+    }
+}
