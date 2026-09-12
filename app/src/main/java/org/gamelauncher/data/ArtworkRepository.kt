@@ -16,21 +16,26 @@ data class Artwork(
     val steamGridId: String?,
     val coverUrl: String?,
     val heroUrl: String?,
+    val iconUrl: String?,
     val icon: Drawable?,
 ) {
     fun imageUrl(landscape: Boolean): String? =
         if (landscape) heroUrl ?: coverUrl else coverUrl ?: heroUrl
+
+    val usesAppIcon: Boolean get() = iconUrl.isNullOrBlank() || iconUrl == ArtCandidate.APP_ICON
 }
 
 class ArtworkRepository(
     context: Context,
     private val playNews: PlayNewsRepository? = null,
+    private val settings: LauncherSettings? = null,
 ) {
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences("artwork", Context.MODE_PRIVATE)
     private val client = SteamGridClient()
     private val memory = ConcurrentHashMap<String, Artwork>()
     private val locks = ConcurrentHashMap<String, Mutex>()
+    private val lists = ConcurrentHashMap<String, List<ArtCandidate>>()
     private val _epoch = MutableStateFlow(0)
     private var authFailed = false
 
@@ -42,6 +47,7 @@ class ArtworkRepository(
             prefs.edit().putString(KEY_API, value.trim()).apply()
             authFailed = false
             memory.clear()
+            lists.clear()
             bump()
         }
 
@@ -77,14 +83,17 @@ class ArtworkRepository(
                 val savedId = steamGridId(packageName)
                 val savedCover = prefs.getString(coverKey(packageName), null)
                 val savedHero = prefs.getString(heroKey(packageName), null)
+                val savedIcon = prefs.getString(iconKey(packageName), null)
                 val playHero = playNews?.heroUrl(packageName)
                 val steamAppId = SteamNative.steamAppId(packageName)
-                if (savedCover != null || savedHero != null) {
+                val defaults = settings?.state?.value
+                if (savedCover != null || savedHero != null || savedIcon != null) {
                     return@withLock Artwork(
                         packageName,
                         savedId,
                         savedCover ?: steamAppId?.let(SteamNative::cdnCover),
                         savedHero ?: playHero ?: steamAppId?.let(SteamNative::cdnHero),
+                        savedIcon,
                         icon,
                     ).also { memory[packageName] = it }
                 }
@@ -96,15 +105,19 @@ class ArtworkRepository(
                             ?: steamAppId?.let { client.gameIdForSteamApp(key, it) }
                             ?: matchId(key, title)
                             ?: return@runCatching null
-                        val art = client.artwork(key, id)
-                        persist(packageName, id, art.coverUrl, art.heroUrl)
-                        Artwork(
-                            packageName,
-                            id,
-                            art.coverUrl ?: steamAppId?.let(SteamNative::cdnCover),
-                            art.heroUrl ?: playHero ?: steamAppId?.let(SteamNative::cdnHero),
-                            icon,
-                        )
+                        val art = client.artwork(key, id, tallCover = defaults?.coverStyle != ArtworkCoverStyle.Wide)
+                        val cover = art.coverUrl ?: steamAppId?.let(SteamNative::cdnCover)
+                        val hero = when (defaults?.backdrop ?: ArtworkBackdrop.Hero) {
+                            ArtworkBackdrop.Hero -> art.heroUrl ?: playHero ?: steamAppId?.let(SteamNative::cdnHero)
+                            ArtworkBackdrop.Tall -> cover ?: art.heroUrl ?: playHero
+                            ArtworkBackdrop.Play -> playHero ?: art.heroUrl ?: steamAppId?.let(SteamNative::cdnHero)
+                        }
+                        val iconUrl = when {
+                            defaults?.iconSource == ArtworkIconSource.SteamGrid -> art.iconUrl
+                            else -> null
+                        }
+                        persist(packageName, id, cover, hero, iconUrl)
+                        Artwork(packageName, id, cover, hero, iconUrl, icon)
                     }.getOrElse { error ->
                         if (error is SteamGridAuthException) authFailed = true
                         null
@@ -119,10 +132,58 @@ class ArtworkRepository(
                     savedId,
                     steamAppId?.let(SteamNative::cdnCover),
                     playHero ?: steamAppId?.let(SteamNative::cdnHero),
+                    null,
                     icon,
                 ).also { memory[packageName] = it }
             }
         }
+
+    suspend fun candidates(
+        packageName: String,
+        title: String,
+        isGame: Boolean,
+        slot: ArtSlot,
+    ): List<ArtCandidate> = withContext(Dispatchers.IO) {
+        val art = resolve(packageName, title, isGame)
+        val cacheKey = "$packageName.$slot"
+        lists[cacheKey]?.let { cached ->
+            return@withContext withLocal(packageName, slot, cached)
+        }
+        val key = apiKey
+        val id = art.steamGridId
+        val remote = if (key.isNotBlank() && !authFailed && !id.isNullOrBlank()) {
+            runCatching { client.list(key, id, slot) }.getOrElse { error ->
+                if (error is SteamGridAuthException) authFailed = true
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+        lists[cacheKey] = remote
+        withLocal(packageName, slot, remote)
+    }
+
+    fun select(packageName: String, slot: ArtSlot, url: String?) {
+        val value = url?.takeIf { it.isNotBlank() }
+        val editor = prefs.edit()
+        when (slot) {
+            ArtSlot.Cover -> editor.putString(coverKey(packageName), value)
+            ArtSlot.Hero -> editor.putString(heroKey(packageName), value)
+            ArtSlot.Icon -> editor.putString(iconKey(packageName), value)
+        }
+        editor.apply()
+        val current = memory[packageName]
+        if (current != null) {
+            memory[packageName] = when (slot) {
+                ArtSlot.Cover -> current.copy(coverUrl = value)
+                ArtSlot.Hero -> current.copy(heroUrl = value)
+                ArtSlot.Icon -> current.copy(iconUrl = value)
+            }
+        } else {
+            memory.remove(packageName)
+        }
+        bump()
+    }
 
     fun setSteamGridId(packageName: String, id: String) {
         val trimmed = id.trim()
@@ -130,9 +191,39 @@ class ArtworkRepository(
             .putString(idKey(packageName), trimmed.ifBlank { null })
             .remove(coverKey(packageName))
             .remove(heroKey(packageName))
+            .remove(iconKey(packageName))
             .apply()
         memory.remove(packageName)
+        lists.keys.filter { it.startsWith("$packageName.") }.forEach { lists.remove(it) }
         bump()
+    }
+
+    private fun withLocal(
+        packageName: String,
+        slot: ArtSlot,
+        remote: List<ArtCandidate>,
+    ): List<ArtCandidate> {
+        val extras = buildList {
+            when (slot) {
+                ArtSlot.Cover -> {
+                    SteamNative.steamAppId(packageName)?.let { steam ->
+                        add(ArtCandidate("steam-cover", SteamNative.cdnCover(steam), SteamNative.cdnCover(steam), 600, 900, "Steam"))
+                    }
+                }
+                ArtSlot.Hero -> {
+                    playNews?.heroUrl(packageName)?.let { url ->
+                        add(ArtCandidate("play-hero", url, url, 0, 0, "Play Store"))
+                    }
+                    SteamNative.steamAppId(packageName)?.let { steam ->
+                        add(ArtCandidate("steam-hero", SteamNative.cdnHero(steam), SteamNative.cdnHero(steam), 1920, 620, "Steam"))
+                    }
+                }
+                ArtSlot.Icon -> {
+                    add(ArtCandidate("app", ArtCandidate.APP_ICON, "", 0, 0, "App"))
+                }
+            }
+        }
+        return (extras + remote).distinctBy { it.url }
     }
 
     private fun Artwork.withPlayHero(packageName: String): Artwork {
@@ -141,11 +232,12 @@ class ArtworkRepository(
         return copy(heroUrl = playHero)
     }
 
-    private fun persist(packageName: String, id: String, cover: String?, hero: String?) {
+    private fun persist(packageName: String, id: String, cover: String?, hero: String?, icon: String?) {
         prefs.edit()
             .putString(idKey(packageName), id)
             .putString(coverKey(packageName), cover)
             .putString(heroKey(packageName), hero)
+            .putString(iconKey(packageName), icon)
             .apply()
     }
 
@@ -165,9 +257,10 @@ class ArtworkRepository(
     private fun idKey(pkg: String) = "id.$pkg"
     private fun coverKey(pkg: String) = "cover.$pkg"
     private fun heroKey(pkg: String) = "hero.$pkg"
+    private fun iconKey(pkg: String) = "icon.$pkg"
 
-    companion object {
-        private const val KEY_API = "api_key"
+    private companion object {
+        const val KEY_API = "api_key"
     }
 }
 

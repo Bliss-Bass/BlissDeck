@@ -83,8 +83,8 @@ fun LauncherApp(onClose: () -> Unit) {
         val context = LocalContext.current
         val snapshot = remember(context) { InstalledCatalog.load(context) }
         val newsRepo = remember(context) { PlayNewsRepository(context) }
-        val artwork = remember(context) { ArtworkRepository(context, newsRepo) }
         val settings = remember(context) { LauncherSettings(context) }
+        val artwork = remember(context) { ArtworkRepository(context, newsRepo, settings) }
         val prefs by settings.state.collectAsState()
         val playHistory = remember(context) { PlayHistory(context) }
         val collections = remember(context) { CollectionsStore(context) }

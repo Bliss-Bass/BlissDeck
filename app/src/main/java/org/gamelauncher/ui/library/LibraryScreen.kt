@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,8 +27,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
+import org.gamelauncher.data.ArtworkCoverStyle
 import org.gamelauncher.data.LibrarySnapshot
 import org.gamelauncher.data.LibraryTab
+import org.gamelauncher.data.LocalSettings
 import org.gamelauncher.data.LocalTheme
 import org.gamelauncher.ui.components.AppIconTile
 import org.gamelauncher.ui.components.CoverArt
@@ -42,6 +45,7 @@ fun LibraryScreen(
     snapshot: LibrarySnapshot,
     onOpenGame: (String) -> Unit,
 ) {
+    val coverLandscape = LocalSettings.current.state.collectAsState().value.coverStyle == ArtworkCoverStyle.Wide
     var tab by remember { mutableStateOf(LibraryTab.AllGames) }
     val showCollections = LocalTheme.current.layouts.libraryCollections
     val visibleTabs = remember(showCollections) {
@@ -104,6 +108,7 @@ fun LibraryScreen(
                         showTitle = true,
                         packageName = game.packageName,
                         isGame = true,
+                        landscape = coverLandscape,
                         modifier = Modifier
                             .height(230.dp)
                             .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
@@ -126,6 +131,7 @@ fun LibraryScreen(
                             showTitle = true,
                             packageName = app.packageName,
                             isGame = true,
+                            landscape = coverLandscape,
                             modifier = Modifier
                                 .height(210.dp)
                                 .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)

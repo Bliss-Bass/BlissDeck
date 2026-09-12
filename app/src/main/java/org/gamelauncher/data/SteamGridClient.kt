@@ -4,6 +4,24 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import kotlin.math.min
+
+enum class ArtSlot { Cover, Hero, Icon }
+
+data class ArtCandidate(
+    val id: String,
+    val url: String,
+    val thumbUrl: String,
+    val width: Int = 0,
+    val height: Int = 0,
+    val source: String = "SteamGridDB",
+) {
+    val isAppIcon: Boolean get() = url == APP_ICON
+
+    companion object {
+        const val APP_ICON = "__app_icon__"
+    }
+}
 
 internal data class SteamGridHit(
     val id: String,
@@ -14,6 +32,7 @@ internal data class SteamGridHit(
 internal data class SteamGridArt(
     val coverUrl: String?,
     val heroUrl: String?,
+    val iconUrl: String?,
 )
 
 internal class SteamGridClient {
@@ -45,32 +64,61 @@ internal class SteamGridClient {
         }
     }
 
-    fun artwork(apiKey: String, gameId: String): SteamGridArt {
-        val cover = firstUrl(
-            get(
-                apiKey,
-                "$BASE/grids/game/$gameId?dimensions=600x900,342x482,660x930&types=static&nsfw=false",
-            ),
+    fun artwork(apiKey: String, gameId: String, tallCover: Boolean): SteamGridArt {
+        val coverDims = if (tallCover) TALL_GRIDS else WIDE_GRIDS
+        return SteamGridArt(
+            coverUrl = assets(apiKey, "grids", gameId, coverDims).firstOrNull()?.url,
+            heroUrl = assets(apiKey, "heroes", gameId, HEROES).firstOrNull()?.url,
+            iconUrl = assets(apiKey, "icons", gameId, dimensions = null).firstOrNull()?.url,
         )
-        val hero = firstUrl(
-            get(
-                apiKey,
-                "$BASE/heroes/game/$gameId?dimensions=1920x620,1600x650&types=static&nsfw=false",
-            ),
-        )
-        return SteamGridArt(cover, hero)
     }
 
-    private fun firstUrl(json: JSONObject?): String? {
-        val data = json?.optJSONArray("data") ?: return null
-        if (data.length() == 0) return null
-        return data.optJSONObject(0)?.optString("url")?.takeIf { it.isNotBlank() }
+    fun list(apiKey: String, gameId: String, slot: ArtSlot): List<ArtCandidate> = when (slot) {
+        ArtSlot.Cover -> (assets(apiKey, "grids", gameId, TALL_GRIDS) + assets(apiKey, "grids", gameId, WIDE_GRIDS))
+            .distinctBy { it.url }
+        ArtSlot.Hero -> assets(apiKey, "heroes", gameId, HEROES)
+        ArtSlot.Icon -> assets(apiKey, "icons", gameId, dimensions = null)
+    }
+
+    private fun assets(
+        apiKey: String,
+        kind: String,
+        gameId: String,
+        dimensions: String?,
+    ): List<ArtCandidate> {
+        val query = buildString {
+            append("$BASE/$kind/game/$gameId?types=static&nsfw=false")
+            if (!dimensions.isNullOrBlank()) append("&dimensions=").append(dimensions)
+        }
+        return parseAssets(get(apiKey, query))
+    }
+
+    private fun parseAssets(json: JSONObject?): List<ArtCandidate> {
+        val data = json?.optJSONArray("data") ?: return emptyList()
+        return buildList {
+            val n = min(data.length(), 24)
+            for (i in 0 until n) {
+                val item = data.optJSONObject(i) ?: continue
+                val url = item.optString("url")
+                if (url.isBlank()) continue
+                val id = item.optInt("id", i)
+                add(
+                    ArtCandidate(
+                        id = id.toString(),
+                        url = url,
+                        thumbUrl = item.optString("thumb").ifBlank { url },
+                        width = item.optInt("width"),
+                        height = item.optInt("height"),
+                    ),
+                )
+            }
+        }
     }
 
     private fun get(apiKey: String, url: String): JSONObject? {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8_000
-            readTimeout = 8_000
+            readTimeout = 12_000
             setRequestProperty("Authorization", "Bearer $apiKey")
             setRequestProperty("Accept", "application/json")
             setRequestProperty("User-Agent", "GameLauncher/0.1")
@@ -87,8 +135,11 @@ internal class SteamGridClient {
         }
     }
 
-    companion object {
-        private const val BASE = "https://www.steamgriddb.com/api/v2"
+    private companion object {
+        const val BASE = "https://www.steamgriddb.com/api/v2"
+        const val TALL_GRIDS = "600x900,342x482,660x930"
+        const val WIDE_GRIDS = "920x430,460x215"
+        const val HEROES = "1920x620,1600x650,3840x1240"
     }
 }
 

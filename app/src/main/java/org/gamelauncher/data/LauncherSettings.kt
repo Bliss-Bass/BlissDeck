@@ -15,6 +15,12 @@ enum class RecentsShape { Square, Wide }
 
 enum class RecentsArt { Icon, Cover }
 
+enum class ArtworkIconSource { App, SteamGrid }
+
+enum class ArtworkCoverStyle { Tall, Wide }
+
+enum class ArtworkBackdrop { Hero, Tall, Play }
+
 data class LauncherPrefs(
     val recentsLayout: RecentsLayout = RecentsLayout.Coverflow,
     val recentsSize: RecentsSize = RecentsSize.Comfortable,
@@ -27,6 +33,9 @@ data class LauncherPrefs(
     val bAsBack: Boolean = true,
     val winOpensMenu: Boolean = true,
     val storePackage: String = "",
+    val iconSource: ArtworkIconSource = ArtworkIconSource.App,
+    val coverStyle: ArtworkCoverStyle = ArtworkCoverStyle.Tall,
+    val backdrop: ArtworkBackdrop = ArtworkBackdrop.Hero,
 )
 
 data class RecentsMetrics(
@@ -73,6 +82,9 @@ class LauncherSettings(context: Context) {
         bAsBack = prefs.getBoolean(KEY_B, true),
         winOpensMenu = prefs.getBoolean(KEY_WIN, true),
         storePackage = prefs.getString(KEY_STORE, "").orEmpty(),
+        iconSource = enumValue(prefs.getString(KEY_ICON_SOURCE, null), ArtworkIconSource.App),
+        coverStyle = enumValue(prefs.getString(KEY_COVER_STYLE, null), ArtworkCoverStyle.Tall),
+        backdrop = enumValue(prefs.getString(KEY_BACKDROP, null), ArtworkBackdrop.Hero),
     )
 
     private fun write(value: LauncherPrefs) {
@@ -88,6 +100,9 @@ class LauncherSettings(context: Context) {
             .putBoolean(KEY_B, value.bAsBack)
             .putBoolean(KEY_WIN, value.winOpensMenu)
             .putString(KEY_STORE, value.storePackage)
+            .putString(KEY_ICON_SOURCE, value.iconSource.name)
+            .putString(KEY_COVER_STYLE, value.coverStyle.name)
+            .putString(KEY_BACKDROP, value.backdrop.name)
             .apply()
     }
 
@@ -103,6 +118,9 @@ class LauncherSettings(context: Context) {
         const val KEY_B = "b_as_back"
         const val KEY_WIN = "win_opens_menu"
         const val KEY_STORE = "store_package"
+        const val KEY_ICON_SOURCE = "artwork_icon_source"
+        const val KEY_COVER_STYLE = "artwork_cover_style"
+        const val KEY_BACKDROP = "artwork_backdrop"
     }
 }
 

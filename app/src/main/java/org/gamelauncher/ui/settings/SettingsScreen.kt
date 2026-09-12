@@ -39,6 +39,9 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.gamelauncher.data.ArtworkBackdrop
+import org.gamelauncher.data.ArtworkCoverStyle
+import org.gamelauncher.data.ArtworkIconSource
 import org.gamelauncher.data.CloseGameService
 import org.gamelauncher.data.GameSession
 import org.gamelauncher.data.LocalArtwork
@@ -459,11 +462,39 @@ fun SettingsScreen() {
         }
 
         SettingsCard("SteamGridDB") {
+            ChoiceRow(
+                "Icons",
+                listOf(
+                    ArtworkIconSource.App to "App icon",
+                    ArtworkIconSource.SteamGrid to "SteamGridDB",
+                ),
+                prefs.iconSource,
+            ) { settings.update { p -> p.copy(iconSource = it) } }
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "Library covers",
+                listOf(
+                    ArtworkCoverStyle.Tall to "Tall card",
+                    ArtworkCoverStyle.Wide to "Wide banner",
+                ),
+                prefs.coverStyle,
+            ) { settings.update { p -> p.copy(coverStyle = it) } }
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "Game backdrop",
+                listOf(
+                    ArtworkBackdrop.Hero to "Hero",
+                    ArtworkBackdrop.Tall to "Tall card",
+                    ArtworkBackdrop.Play to "Play art",
+                ),
+                prefs.backdrop,
+            ) { settings.update { p -> p.copy(backdrop = it) } }
+            Spacer(Modifier.height(12.dp))
             Text(
                 if (apiKey.isBlank()) {
-                    "App icons show immediately. Paste an API key to fetch covers and heroes."
+                    "App icons show immediately. Paste an API key to fetch covers, heroes, and icons. Pick a specific image on a game’s Info page."
                 } else {
-                    "API key saved. Covers refresh for games as they appear."
+                    "API key saved. Open a game’s Info page to choose among SteamGridDB covers, heroes, and icons."
                 },
                 color = TextMuted,
                 fontSize = 14.sp,

@@ -57,6 +57,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
+import org.gamelauncher.data.ArtCandidate
+import org.gamelauncher.data.ArtSlot
+import org.gamelauncher.data.Artwork
 import org.gamelauncher.data.AppPresence
 import org.gamelauncher.data.AppRunState
 import org.gamelauncher.data.Game
@@ -71,11 +74,13 @@ import org.gamelauncher.data.LocalTheme
 import org.gamelauncher.data.SteamNative
 import org.gamelauncher.data.TitleDetails
 import org.gamelauncher.ui.components.AmbientBackdrop
-import org.gamelauncher.ui.components.AppIconImage
+import org.gamelauncher.ui.components.GameIcon
 import org.gamelauncher.ui.components.ArtworkLayer
 import org.gamelauncher.ui.components.CoverArt
 import org.gamelauncher.ui.components.ShoulderKey
 import org.gamelauncher.ui.components.SteamPill
+import org.gamelauncher.ui.components.tileClick
+import org.gamelauncher.ui.components.tileFrame
 import org.gamelauncher.ui.components.hueBrush
 import org.gamelauncher.ui.components.rememberArtwork
 import org.gamelauncher.ui.theme.Background
@@ -175,17 +180,15 @@ private fun ActivityPage(
             contentAlignment = Alignment.Center,
         ) {
             ArtworkLayer(artwork, landscape = true)
-            artwork.icon?.let { icon ->
-                AppIconImage(
-                    icon,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 24.dp, bottom = 18.dp)
-                        .size(84.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .border(1.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(14.dp)),
-                )
-            }
+            GameIcon(
+                artwork,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 24.dp, bottom = 18.dp)
+                    .size(84.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(14.dp)),
+            )
             if (artwork.imageUrl(true) == null) {
                 Text(
                     game.title.uppercase(),
@@ -411,6 +414,8 @@ private fun GameInfoPage(game: Game, details: TitleDetails, onTab: (GamePageTab)
             }
         }
         Spacer(Modifier.height(28.dp))
+        ArtPicker(game, artwork)
+        Spacer(Modifier.height(28.dp))
         Text(
             "You can change the SteamGrid ID per game and suggest it for future releases. Check the box ‘Suggest this ID’ only for correct IDs",
             color = TextMuted,
@@ -455,6 +460,91 @@ private fun GameInfoPage(game: Game, details: TitleDetails, onTab: (GamePageTab)
                     showChangeId = false
                 },
             )
+        }
+    }
+}
+
+@Composable
+private fun ArtPicker(game: Game, artwork: Artwork) {
+    val repo = LocalArtwork.current
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Text("Artwork", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            "Pick a tall card, backdrop, and icon from SteamGridDB. Defaults for new games live in Settings.",
+            color = TextMuted,
+            fontSize = 14.sp,
+        )
+        ArtSlot.entries.forEach { slot ->
+            ArtChoiceRow(game, artwork, slot) { url -> repo.select(game.packageName, slot, url) }
+        }
+    }
+}
+
+@Composable
+private fun ArtChoiceRow(
+    game: Game,
+    artwork: Artwork,
+    slot: ArtSlot,
+    onSelect: (String) -> Unit,
+) {
+    val repo = LocalArtwork.current
+    val options by produceState(emptyList<ArtCandidate>(), game.packageName, artwork.steamGridId, slot, repo.epoch.collectAsState().value) {
+        value = repo.candidates(game.packageName, game.title, game.inLibrary, slot)
+    }
+    val selected = when (slot) {
+        ArtSlot.Cover -> artwork.coverUrl
+        ArtSlot.Hero -> artwork.heroUrl
+        ArtSlot.Icon -> artwork.iconUrl ?: ArtCandidate.APP_ICON
+    }
+    val label = when (slot) {
+        ArtSlot.Cover -> "Tall card"
+        ArtSlot.Hero -> "Backdrop"
+        ArtSlot.Icon -> "Icon"
+    }
+    Column {
+        Text(label, color = TextMuted, fontSize = 13.sp)
+        Spacer(Modifier.height(8.dp))
+        if (options.isEmpty()) {
+            Text(
+                if (repo.apiKey.isBlank()) "Add a SteamGridDB API key in Settings to load more art."
+                else "No ${label.lowercase()} options yet.",
+                color = TextMuted,
+                fontSize = 14.sp,
+            )
+        } else {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                options.forEach { option ->
+                    val picked = option.url == selected || (option.isAppIcon && artwork.usesAppIcon)
+                    val (w, h) = when (slot) {
+                        ArtSlot.Cover -> 72.dp to 108.dp
+                        ArtSlot.Hero -> 168.dp to 54.dp
+                        ArtSlot.Icon -> 64.dp to 64.dp
+                    }
+                    Box(
+                        modifier = Modifier
+                            .width(w)
+                            .height(h)
+                            .tileFrame(picked, RoundedCornerShape(4.dp), width = 2.dp)
+                            .background(Tile, RoundedCornerShape(4.dp))
+                            .tileClick { onSelect(option.url) }
+                            .clip(RoundedCornerShape(4.dp)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        when {
+                            option.isAppIcon -> GameIcon(artwork.copy(iconUrl = ArtCandidate.APP_ICON), Modifier.fillMaxSize().padding(8.dp))
+                            else -> AsyncImage(
+                                model = option.thumbUrl,
+                                contentDescription = option.source,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

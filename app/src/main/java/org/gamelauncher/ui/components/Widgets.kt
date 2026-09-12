@@ -81,7 +81,7 @@ fun rememberArtwork(
     val epoch by repo.epoch.collectAsState()
     val icon = remember(packageName) { repo.iconFor(packageName) }
     val placeholder = remember(packageName, icon) {
-        Artwork(packageName, repo.steamGridId(packageName), null, null, icon)
+        Artwork(packageName, repo.steamGridId(packageName), null, null, null, icon)
     }
     val art by produceState(placeholder, packageName, title, isGame, epoch) {
         value = repo.resolve(packageName, title, isGame)
@@ -105,7 +105,7 @@ fun CoverArt(
     val artwork = if (packageName.isNotBlank()) {
         rememberArtwork(packageName, title, isGame)
     } else {
-        Artwork("", null, null, null, null)
+        Artwork("", null, null, null, null, null)
     }
     val shape = RoundedCornerShape(2.dp)
     Box(
@@ -142,12 +142,17 @@ fun ArtworkLayer(
     modifier: Modifier = Modifier,
     preferIcon: Boolean = false,
 ) {
-    val url = artwork.imageUrl(landscape).takeUnless { preferIcon }
+    val iconUrl = artwork.iconUrl?.takeIf { it.startsWith("http") }
+    val url = when {
+        preferIcon && iconUrl != null -> iconUrl
+        preferIcon -> null
+        else -> artwork.imageUrl(landscape)
+    }
     when {
         url != null -> AsyncImage(
             model = url,
             contentDescription = null,
-            contentScale = ContentScale.Crop,
+            contentScale = if (preferIcon) ContentScale.Fit else ContentScale.Crop,
             modifier = modifier.fillMaxSize(),
         )
         artwork.icon != null -> DrawableImage(
@@ -174,6 +179,20 @@ fun ArtworkLayer(
 @Composable
 fun AppIconImage(drawable: Drawable, modifier: Modifier = Modifier) {
     DrawableImage(drawable, modifier, ContentScale.Crop)
+}
+
+@Composable
+fun GameIcon(artwork: Artwork, modifier: Modifier = Modifier) {
+    val url = artwork.iconUrl?.takeIf { it.startsWith("http") }
+    when {
+        url != null -> AsyncImage(
+            model = url,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier,
+        )
+        artwork.icon != null -> AppIconImage(artwork.icon, modifier)
+    }
 }
 
 @Composable
