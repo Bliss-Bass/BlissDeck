@@ -309,6 +309,7 @@ private fun RecentsCoverflow(
     val visualPos = if (dragging) dragPos else position.value
     val nearest = visualPos.roundToInt().coerceIn(0, recents.lastIndex.coerceAtLeast(0))
     val tilt = if (prefs.recentsTilt) 8f else 0f
+    val recentsShape = cardShape()
     val settle = spring<Float>(
         dampingRatio = 0.92f,
         stiffness = Spring.StiffnessMedium,
@@ -428,6 +429,8 @@ private fun RecentsCoverflow(
                             this.scaleX = scale
                             this.scaleY = scale
                             cameraDistance = 24f * this.density
+                            shape = recentsShape
+                            clip = true
                             shadowElevation = (4f + 8f * expand) * this.density
                             transformOrigin = TransformOrigin(0.5f, 0.5f)
                         }
