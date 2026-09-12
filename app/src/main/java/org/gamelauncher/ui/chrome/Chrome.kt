@@ -391,7 +391,7 @@ fun CommandBar(
                 .padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-        val mark = 22.dp * LocalDensity.current.fontScale
+        val mark = 26.dp * LocalDensity.current.fontScale
         Row(
             modifier = Modifier
                 .tileFrame(false, RoundedCornerShape(6.dp), width = 3.dp)

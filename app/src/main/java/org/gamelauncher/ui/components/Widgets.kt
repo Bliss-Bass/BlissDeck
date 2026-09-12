@@ -50,6 +50,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -72,6 +73,7 @@ import org.gamelauncher.data.LocalSettings
 import org.gamelauncher.ui.theme.Footer
 import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
+import org.gamelauncher.R
 import org.gamelauncher.data.Artwork
 import org.gamelauncher.data.LocalArtwork
 import org.gamelauncher.data.LocalTheme
@@ -398,27 +400,11 @@ fun centeredLabelStyle(
 
 @Composable
 fun DiamondMark(size: Dp = 28.dp, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(size)) {
-        val path = Path().apply {
-            moveTo(this@Canvas.size.width / 2f, 2f)
-            lineTo(this@Canvas.size.width - 2f, this@Canvas.size.height / 2f)
-            lineTo(this@Canvas.size.width / 2f, this@Canvas.size.height - 2f)
-            lineTo(2f, this@Canvas.size.height / 2f)
-            close()
-        }
-        drawPath(path, Color.White)
-        val inner = Path().apply {
-            val cx = this@Canvas.size.width / 2f
-            val cy = this@Canvas.size.height / 2f
-            val r = this@Canvas.size.minDimension * 0.22f
-            moveTo(cx, cy - r)
-            lineTo(cx + r, cy)
-            lineTo(cx, cy + r)
-            lineTo(cx - r, cy)
-            close()
-        }
-        drawPath(inner, Color.Black)
-    }
+    Image(
+        painter = painterResource(R.drawable.ic_abxy),
+        contentDescription = null,
+        modifier = modifier.size(size),
+    )
 }
 
 fun String.stableHue(): Float = (hashCode().absoluteValue % 360).toFloat()
