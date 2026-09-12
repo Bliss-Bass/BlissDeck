@@ -30,6 +30,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import org.gamelauncher.MainActivity
 import org.gamelauncher.data.AccountPhotoStore
@@ -51,6 +53,7 @@ import org.gamelauncher.data.ThemeStore
 import org.gamelauncher.data.PlayNewsRepository
 import org.gamelauncher.data.RunningApp
 import org.gamelauncher.data.TitleDetailsRepository
+import org.gamelauncher.data.effectiveFontScale
 import org.gamelauncher.data.findEntry
 import org.gamelauncher.ui.chrome.ApplySystemBarMode
 import org.gamelauncher.ui.chrome.CommandBar
@@ -186,7 +189,12 @@ fun LauncherApp(onClose: () -> Unit) {
         val freeform = rememberFreeformWindow()
         ApplySystemBarMode(freeform)
 
+        val parentDensity = LocalDensity.current
         CompositionLocalProvider(
+            LocalDensity provides Density(
+                density = parentDensity.density,
+                fontScale = prefs.effectiveFontScale(parentDensity.fontScale),
+            ),
             LocalArtwork provides artwork,
             LocalSettings provides settings,
             LocalAccountPhoto provides accountPhoto,

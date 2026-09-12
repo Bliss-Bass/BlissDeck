@@ -21,6 +21,23 @@ enum class ArtworkCoverStyle { Tall, Wide }
 
 enum class ArtworkBackdrop { Hero, Tall, Play }
 
+enum class TextSize {
+    Default, Larger, Largest;
+
+    val multiplier: Float
+        get() = when (this) {
+            Default -> 1f
+            Larger -> 1.25f
+            Largest -> 1.5f
+        }
+}
+
+fun LauncherPrefs.effectiveFontScale(system: Float): Float =
+    (system * textSize.multiplier).coerceIn(TEXT_SCALE_MIN, TEXT_SCALE_MAX)
+
+private const val TEXT_SCALE_MIN = 1f
+private const val TEXT_SCALE_MAX = 1.75f
+
 data class LauncherPrefs(
     val recentsLayout: RecentsLayout = RecentsLayout.Coverflow,
     val recentsSize: RecentsSize = RecentsSize.Comfortable,
@@ -39,6 +56,7 @@ data class LauncherPrefs(
     val iconSource: ArtworkIconSource = ArtworkIconSource.App,
     val coverStyle: ArtworkCoverStyle = ArtworkCoverStyle.Tall,
     val backdrop: ArtworkBackdrop = ArtworkBackdrop.Hero,
+    val textSize: TextSize = TextSize.Default,
 )
 
 data class RecentsMetrics(
@@ -91,6 +109,7 @@ class LauncherSettings(context: Context) {
         iconSource = enumValue(prefs.getString(KEY_ICON_SOURCE, null), ArtworkIconSource.App),
         coverStyle = enumValue(prefs.getString(KEY_COVER_STYLE, null), ArtworkCoverStyle.Tall),
         backdrop = enumValue(prefs.getString(KEY_BACKDROP, null), ArtworkBackdrop.Hero),
+        textSize = enumValue(prefs.getString(KEY_TEXT_SIZE, null), TextSize.Default),
     )
 
     private fun write(value: LauncherPrefs) {
@@ -112,6 +131,7 @@ class LauncherSettings(context: Context) {
             .putString(KEY_ICON_SOURCE, value.iconSource.name)
             .putString(KEY_COVER_STYLE, value.coverStyle.name)
             .putString(KEY_BACKDROP, value.backdrop.name)
+            .putString(KEY_TEXT_SIZE, value.textSize.name)
             .apply()
     }
 
@@ -133,6 +153,7 @@ class LauncherSettings(context: Context) {
         const val KEY_ICON_SOURCE = "artwork_icon_source"
         const val KEY_COVER_STYLE = "artwork_cover_style"
         const val KEY_BACKDROP = "artwork_backdrop"
+        const val KEY_TEXT_SIZE = "text_size"
     }
 }
 

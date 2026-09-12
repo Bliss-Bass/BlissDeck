@@ -68,6 +68,7 @@ import org.gamelauncher.data.RecentsLayout
 import org.gamelauncher.data.RecentsShape
 import org.gamelauncher.data.RecentsSize
 import org.gamelauncher.data.StoreApps
+import org.gamelauncher.data.TextSize
 import org.gamelauncher.ui.components.SteamPill
 import org.gamelauncher.ui.components.tileClick
 import org.gamelauncher.ui.components.tileFrame
@@ -233,6 +234,20 @@ fun SettingsScreen() {
                     }
                 }
             }
+        }
+
+        SettingsCard("Display") {
+            ChoiceRow(
+                "Text size",
+                TextSize.entries.map { it to it.label },
+                prefs.textSize,
+            ) { settings.update { p -> p.copy(textSize = it) } }
+            Text(
+                "Scales every launcher label. Default never goes below the designed size, even if the system font is smaller. Largest is capped so titles still fit.",
+                color = TextMuted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 8.dp),
+            )
         }
 
         SettingsCard("Bars") {
@@ -660,6 +675,13 @@ private val RecentsArt.label: String
     get() = when (this) {
         RecentsArt.Icon -> "App icon"
         RecentsArt.Cover -> "Cover art"
+    }
+
+private val TextSize.label: String
+    get() = when (this) {
+        TextSize.Default -> "Default"
+        TextSize.Larger -> "Larger"
+        TextSize.Largest -> "Largest"
     }
 
 @Composable
