@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.gamelauncher.data.rememberIsDefaultHome
 import org.gamelauncher.ui.theme.Menu
 import org.gamelauncher.ui.theme.TextMuted
 import org.gamelauncher.ui.theme.TextPrimary
@@ -50,6 +51,7 @@ fun UserMenu(
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull().orEmpty().ifBlank { "dev" }
     }
+    val isDefaultHome = rememberIsDefaultHome()
     Column(
         modifier = Modifier
             .width(300.dp)
@@ -92,9 +94,11 @@ fun UserMenu(
             onDismiss()
             start(context, Intent(Settings.ACTION_DEVICE_INFO_SETTINGS))
         }
-        UserMenuRow("Close launcher", Icons.Default.Close) {
-            onDismiss()
-            onCloseLauncher()
+        if (!isDefaultHome) {
+            UserMenuRow("Close launcher", Icons.Default.Close) {
+                onDismiss()
+                onCloseLauncher()
+            }
         }
     }
 }

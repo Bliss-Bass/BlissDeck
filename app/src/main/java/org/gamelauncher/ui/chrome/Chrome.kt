@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import org.gamelauncher.data.rememberIsDefaultHome
 import org.gamelauncher.ui.components.DiamondMark
 import org.gamelauncher.ui.components.FaceButton
 import org.gamelauncher.ui.components.tileClick
@@ -265,6 +266,7 @@ fun SideMenu(
     current: Screen,
     onSelect: (MenuItem) -> Unit,
 ) {
+    val hideClose = rememberIsDefaultHome()
     Column(
         modifier = Modifier
             .width(300.dp)
@@ -273,6 +275,7 @@ fun SideMenu(
             .padding(top = 28.dp, bottom = 12.dp),
     ) {
         MenuItem.entries.forEach { item ->
+            if (item == MenuItem.Close && hideClose) return@forEach
             val selected = when (item) {
                 MenuItem.Home -> current is Screen.Home
                 MenuItem.Library -> current is Screen.Library
