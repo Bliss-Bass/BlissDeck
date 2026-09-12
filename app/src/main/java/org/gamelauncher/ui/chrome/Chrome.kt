@@ -71,6 +71,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,6 +90,7 @@ import org.gamelauncher.ui.components.AppIconImage
 import org.gamelauncher.ui.components.DiamondMark
 import org.gamelauncher.ui.components.FaceButton
 import org.gamelauncher.ui.components.HoverCaption
+import org.gamelauncher.ui.components.centeredLabelStyle
 import org.gamelauncher.ui.components.columnFocus
 import org.gamelauncher.ui.components.rememberArtwork
 import org.gamelauncher.ui.components.tileClick
@@ -389,6 +391,7 @@ fun CommandBar(
                 .padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+        val mark = 22.dp * LocalDensity.current.fontScale
         Row(
             modifier = Modifier
                 .tileFrame(false, RoundedCornerShape(6.dp), width = 3.dp)
@@ -396,9 +399,13 @@ fun CommandBar(
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            DiamondMark(22.dp)
+            DiamondMark(mark)
             Spacer(Modifier.width(10.dp))
-            Text("MENU", color = TextPrimary, fontSize = 14.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Medium)
+            Text(
+                "MENU",
+                color = TextPrimary,
+                style = centeredLabelStyle(14.sp, FontWeight.Medium, 1.2.sp),
+            )
         }
         Spacer(Modifier.weight(1f))
         hints.extra?.let { (letter, caption) ->
@@ -412,6 +419,7 @@ fun CommandBar(
                 .tileFrame(false, RoundedCornerShape(6.dp), width = 3.dp)
                 .tileClick(onBack)
                 .padding(horizontal = 8.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center,
         ) {
             FaceButton("B", hints.back)
         }

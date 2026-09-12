@@ -50,9 +50,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -308,16 +313,14 @@ fun SteamPill(
         Text(
             text = label.uppercase(),
             color = if (selected) Color(0xFF1B1F24) else TextPrimary,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            letterSpacing = 1.1.sp,
+            style = centeredLabelStyle(13.sp, FontWeight.Medium, 1.1.sp),
         )
         if (count != null) {
             Spacer(Modifier.width(8.dp))
             Text(
                 text = count.toString(),
                 color = if (selected) Color(0xFF1B1F24) else TextMuted,
-                fontSize = 13.sp,
+                style = centeredLabelStyle(13.sp),
             )
         }
     }
@@ -340,33 +343,58 @@ fun ShoulderKey(label: String, modifier: Modifier = Modifier, onClick: () -> Uni
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(label, color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(
+                label,
+                color = Color.Black,
+                style = centeredLabelStyle(14.sp, FontWeight.Bold),
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
 
 @Composable
 fun FaceButton(letter: String, caption: String, modifier: Modifier = Modifier) {
+    val circle = 22.dp * LocalDensity.current.fontScale
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
-                .size(22.dp)
+                .size(circle)
                 .clip(CircleShape)
                 .background(Color.White),
             contentAlignment = Alignment.Center,
         ) {
-            Text(letter, color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            Text(
+                letter,
+                color = Color.Black,
+                style = centeredLabelStyle(12.sp, FontWeight.Bold),
+                textAlign = TextAlign.Center,
+            )
         }
         Spacer(Modifier.width(8.dp))
         Text(
             caption.uppercase(),
             color = TextPrimary,
-            fontSize = 13.sp,
-            letterSpacing = 1.sp,
-            fontWeight = FontWeight.Medium,
+            style = centeredLabelStyle(13.sp, FontWeight.Medium, 1.sp),
         )
     }
 }
+
+fun centeredLabelStyle(
+    fontSize: TextUnit,
+    fontWeight: FontWeight = FontWeight.Medium,
+    letterSpacing: TextUnit = TextUnit.Unspecified,
+): TextStyle = TextStyle(
+    fontSize = fontSize,
+    fontWeight = fontWeight,
+    letterSpacing = letterSpacing,
+    lineHeight = fontSize,
+    platformStyle = PlatformTextStyle(includeFontPadding = false),
+    lineHeightStyle = LineHeightStyle(
+        alignment = LineHeightStyle.Alignment.Center,
+        trim = LineHeightStyle.Trim.Both,
+    ),
+)
 
 @Composable
 fun DiamondMark(size: Dp = 28.dp, modifier: Modifier = Modifier) {
