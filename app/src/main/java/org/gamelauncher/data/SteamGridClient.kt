@@ -121,7 +121,7 @@ internal class SteamGridClient {
             readTimeout = 12_000
             setRequestProperty("Authorization", "Bearer $apiKey")
             setRequestProperty("Accept", "application/json")
-            setRequestProperty("User-Agent", "GameLauncher/0.1")
+            setRequestProperty("User-Agent", "BlissDeck/0.1")
         }
         return try {
             val code = connection.responseCode

@@ -259,7 +259,7 @@ fun ThemePack.toIni(): String = buildString {
     fun StringBuilder.kv(key: String, value: String) {
         append(key).append('=').append(value).append('\n')
     }
-    append("; Game Launcher theme\n\n")
+    append("; BlissDeck theme\n\n")
     section("meta") {
         kv("id", id)
         kv("name", name)

@@ -1,4 +1,4 @@
-# Game Launcher
+# BlissDeck
 
 A landscape Steam-library **HOME** for Android-x86, Bliss OS, and Waydroid. It lists installed Android games and apps, launches them, and optionally pulls covers from [SteamGridDB](https://www.steamgriddb.com/).
 
@@ -30,7 +30,7 @@ Or point it at a device:
 ANDROID_HOME=$HOME/Android/Sdk ANDROID_SERIAL=192.168.1.100:5555 ./gradlew :app:installDebug
 ```
 
-On a desktop-mode tablet it will open as a freeform window. Maximize or fullscreen it like any other desktop app. The debug display name is **Game Launcher**.
+On a desktop-mode tablet it will open as a freeform window. Maximize or fullscreen it like any other desktop app. The display name is **BlissDeck**.
 
 ## Artwork
 

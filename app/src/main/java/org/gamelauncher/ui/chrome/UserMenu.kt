@@ -31,8 +31,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.gamelauncher.R
 import org.gamelauncher.data.rememberIsDefaultHome
 import org.gamelauncher.data.LocalTheme
 import org.gamelauncher.ui.theme.Menu
@@ -62,7 +64,7 @@ fun UserMenu(
             .padding(vertical = 10.dp),
     ) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
-            Text("Game Launcher", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.app_name), color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Text(version, color = TextMuted, fontSize = 13.sp)
         }
         Spacer(Modifier.height(4.dp))

@@ -171,7 +171,7 @@ fun SettingsScreen() {
                     fontSize = 15.sp,
                     modifier = Modifier
                         .tileFrame(false, RoundedCornerShape(4.dp), width = 2.dp)
-                        .tileClick { exportTheme.launch("launcher-theme.ini") }
+                        .tileClick { exportTheme.launch("blissdeck-theme.ini") }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                 )
             }

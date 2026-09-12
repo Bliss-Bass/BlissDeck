@@ -81,8 +81,8 @@ class ThemeStore(context: Context) {
 
     private fun catalog(): List<ThemeEntry> {
         val out = ArrayList<ThemeEntry>()
-        out += ThemeEntry("default", "Default", "Game Launcher", builtin = true, enabled = true)
-        out += ThemeEntry("midnight", "Midnight", "Game Launcher", builtin = true, enabled = false)
+        out += ThemeEntry("default", "Default", "BlissDeck", builtin = true, enabled = true)
+        out += ThemeEntry("midnight", "Midnight", "BlissDeck", builtin = true, enabled = false)
         if (customFile().exists()) {
             val custom = ThemePack.fromIni(parseIni(customFile().readText()))
             out += ThemeEntry("custom", custom.name.ifBlank { "Custom" }, custom.author, builtin = false, enabled = false)
