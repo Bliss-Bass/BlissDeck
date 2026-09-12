@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -56,6 +57,7 @@ import kotlinx.coroutines.delay
 import org.gamelauncher.data.rememberIsDefaultHome
 import org.gamelauncher.ui.components.DiamondMark
 import org.gamelauncher.ui.components.FaceButton
+import org.gamelauncher.ui.components.columnFocus
 import org.gamelauncher.ui.components.tileClick
 import org.gamelauncher.ui.components.tileFrame
 import org.gamelauncher.ui.navigation.MenuItem
@@ -267,6 +269,24 @@ fun SideMenu(
     onSelect: (MenuItem) -> Unit,
 ) {
     val hideClose = rememberIsDefaultHome()
+    val visible = remember(hideClose) {
+        MenuItem.entries.filter { it != MenuItem.Close || !hideClose }
+    }
+    val enabled = remember(visible) { visible.filter { it.enabled } }
+    val requesters = remember(enabled) { List(enabled.size) { FocusRequester() } }
+    val selectedIndex = enabled.indexOfFirst { item ->
+        when (item) {
+            MenuItem.Home -> current is Screen.Home
+            MenuItem.Library -> current is Screen.Library
+            MenuItem.Store -> current is Screen.Store
+            MenuItem.Settings -> current is Screen.Settings
+            else -> false
+        }
+    }.coerceAtLeast(0)
+    LaunchedEffect(requesters, selectedIndex) {
+        delay(40)
+        runCatching { requesters[selectedIndex].requestFocus() }
+    }
     Column(
         modifier = Modifier
             .width(300.dp)
@@ -274,8 +294,7 @@ fun SideMenu(
             .background(Menu)
             .padding(top = 28.dp, bottom = 12.dp),
     ) {
-        MenuItem.entries.forEach { item ->
-            if (item == MenuItem.Close && hideClose) return@forEach
+        visible.forEach { item ->
             val selected = when (item) {
                 MenuItem.Home -> current is Screen.Home
                 MenuItem.Library -> current is Screen.Library
@@ -293,7 +312,14 @@ fun SideMenu(
                 MenuItem.Settings -> Icons.Default.Settings
                 MenuItem.Close -> Icons.Default.Close
             }
-            MenuRow(item.label, icon, selected, item.enabled) { onSelect(item) }
+            val focusIndex = enabled.indexOf(item)
+            MenuRow(
+                label = item.label,
+                icon = icon,
+                selected = selected,
+                enabled = item.enabled,
+                modifier = if (focusIndex >= 0) Modifier.columnFocus(requesters, focusIndex) else Modifier,
+            ) { onSelect(item) }
         }
     }
 }
@@ -304,6 +330,7 @@ private fun MenuRow(
     icon: ImageVector,
     selected: Boolean,
     enabled: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val bg = if (selected) MenuHighlight else Color.Transparent
@@ -312,11 +339,11 @@ private fun MenuRow(
         else -> TextPrimary
     }
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .tileFrame(selected, RoundedCornerShape(0.dp), width = 2.dp)
             .background(bg)
-            .clickable(enabled = enabled, onClick = onClick)
+            .then(if (enabled) Modifier.tileClick(onClick) else Modifier)
             .padding(horizontal = 28.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -332,7 +359,8 @@ fun DimScrim(onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.45f))
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .focusProperties { canFocus = false },
     )
 }
 

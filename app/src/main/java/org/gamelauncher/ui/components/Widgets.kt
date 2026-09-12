@@ -383,3 +383,13 @@ fun Modifier.rowFocus(requesters: List<FocusRequester>, index: Int): Modifier {
         right = requesters.getOrNull(index + 1) ?: FocusRequester.Cancel
     }
 }
+
+@OptIn(ExperimentalComposeUiApi::class)
+fun Modifier.columnFocus(requesters: List<FocusRequester>, index: Int): Modifier {
+    return focusRequester(requesters[index]).focusProperties {
+        up = requesters.getOrNull(index - 1) ?: FocusRequester.Cancel
+        down = requesters.getOrNull(index + 1) ?: FocusRequester.Cancel
+        left = FocusRequester.Cancel
+        right = FocusRequester.Cancel
+    }
+}
