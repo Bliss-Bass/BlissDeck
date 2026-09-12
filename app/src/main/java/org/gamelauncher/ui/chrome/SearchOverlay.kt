@@ -36,6 +36,7 @@ import org.gamelauncher.ui.theme.Background
 import org.gamelauncher.ui.theme.TextMuted
 import org.gamelauncher.ui.theme.TextPrimary
 import org.gamelauncher.ui.theme.Tile
+import org.gamelauncher.ui.theme.chromeContentPadding
 
 @Composable
 fun SearchOverlay(
@@ -67,7 +68,7 @@ fun SearchOverlay(
                 interactionSource = remember { MutableInteractionSource() },
                 onClick = {},
             )
-            .padding(horizontal = 28.dp, vertical = 16.dp),
+            .chromeContentPadding(extraTop = 16.dp, extraBottom = 16.dp, horizontal = 28.dp),
     ) {
         when {
             query.isBlank() -> Text(

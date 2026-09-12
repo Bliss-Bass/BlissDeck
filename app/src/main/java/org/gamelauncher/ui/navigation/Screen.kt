@@ -12,9 +12,6 @@ enum class MenuItem(val label: String, val enabled: Boolean) {
     Home("Home", true),
     Library("Library", true),
     Store("Store", true),
-    Friends("Friends & Chat", false),
-    Media("Media", false),
-    Downloads("Downloads", false),
     Settings("Settings", true),
     Close("Close", true),
 }

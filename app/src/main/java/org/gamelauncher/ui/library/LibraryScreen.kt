@@ -3,7 +3,6 @@ package org.gamelauncher.ui.library
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,18 +25,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import org.gamelauncher.data.LibrarySnapshot
 import org.gamelauncher.data.LibraryTab
+import org.gamelauncher.data.LocalTheme
 import org.gamelauncher.ui.components.AppIconTile
 import org.gamelauncher.ui.components.CoverArt
 import org.gamelauncher.ui.components.ShoulderKey
 import org.gamelauncher.ui.components.SteamPill
 import org.gamelauncher.ui.components.tileClick
 import org.gamelauncher.ui.theme.Background
-import org.gamelauncher.ui.theme.TextMuted
+import org.gamelauncher.ui.theme.chromeContentPadding
 
 @Composable
 fun LibraryScreen(
@@ -46,25 +43,32 @@ fun LibraryScreen(
     onOpenGame: (String) -> Unit,
 ) {
     var tab by remember { mutableStateOf(LibraryTab.AllGames) }
+    val showCollections = LocalTheme.current.layouts.libraryCollections
+    val visibleTabs = remember(showCollections) {
+        LibraryTab.entries.filter { it != LibraryTab.Collections || showCollections }
+    }
     val firstFocus = remember(tab) { FocusRequester() }
     LaunchedEffect(tab) {
         kotlinx.coroutines.delay(80)
         runCatching { firstFocus.requestFocus() }
+    }
+    LaunchedEffect(showCollections) {
+        if (!showCollections && tab == LibraryTab.Collections) tab = LibraryTab.AllGames
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .chromeContentPadding(extraTop = 12.dp, extraBottom = 12.dp, horizontal = 24.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ShoulderKey("L1") {
-                val values = LibraryTab.entries
-                tab = values[(tab.ordinal - 1 + values.size) % values.size]
+                val i = visibleTabs.indexOf(tab).let { if (it < 0) 0 else it }
+                tab = visibleTabs[(i - 1 + visibleTabs.size) % visibleTabs.size]
             }
             Spacer(Modifier.weight(1f))
             SteamPill("All Games", tab == LibraryTab.AllGames, count = snapshot.libraryGames.size) {
@@ -74,14 +78,14 @@ fun LibraryScreen(
             SteamPill("Installed", tab == LibraryTab.Installed, count = snapshot.installed.size) {
                 tab = LibraryTab.Installed
             }
-            Spacer(Modifier.width(28.dp))
-            SteamPill("Friends", tab == LibraryTab.Friends) { tab = LibraryTab.Friends }
-            Spacer(Modifier.width(28.dp))
-            SteamPill("Collections", tab == LibraryTab.Collections) { tab = LibraryTab.Collections }
+            if (showCollections) {
+                Spacer(Modifier.width(28.dp))
+                SteamPill("Collections", tab == LibraryTab.Collections) { tab = LibraryTab.Collections }
+            }
             Spacer(Modifier.weight(1f))
             ShoulderKey("R1") {
-                val values = LibraryTab.entries
-                tab = values[(tab.ordinal + 1) % values.size]
+                val i = visibleTabs.indexOf(tab).let { if (it < 0) 0 else it }
+                tab = visibleTabs[(i + 1) % visibleTabs.size]
             }
         }
         Spacer(Modifier.height(20.dp))
@@ -140,18 +144,7 @@ fun LibraryScreen(
                     }
                 }
             }
-            LibraryTab.Friends, LibraryTab.Collections -> Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.TopCenter,
-            ) {
-                Text(
-                    "Not available yet :(",
-                    color = TextMuted,
-                    fontSize = 16.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
+            LibraryTab.Collections -> CollectionsPane(snapshot, onOpenGame)
         }
     }
 }

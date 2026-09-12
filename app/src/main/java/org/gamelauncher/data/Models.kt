@@ -1,6 +1,6 @@
 package org.gamelauncher.data
 
-enum class LibraryTab { AllGames, Installed, Friends, Collections }
+enum class LibraryTab { AllGames, Installed, Collections }
 
 enum class HomeFeedTab { WhatsNew, Favorites, Recommended }
 

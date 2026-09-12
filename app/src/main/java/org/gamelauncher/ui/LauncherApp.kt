@@ -32,12 +32,23 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import org.gamelauncher.MainActivity
+import org.gamelauncher.data.AppPresence
 import org.gamelauncher.data.ArtworkRepository
+import org.gamelauncher.data.CollectionsStore
+import org.gamelauncher.data.GameSession
 import org.gamelauncher.data.InstalledCatalog
 import org.gamelauncher.data.LauncherSettings
 import org.gamelauncher.data.LocalArtwork
+import org.gamelauncher.data.LocalCollections
+import org.gamelauncher.data.LocalDetails
+import org.gamelauncher.data.LocalPlayHistory
 import org.gamelauncher.data.LocalSettings
+import org.gamelauncher.data.LocalThemeStore
+import org.gamelauncher.data.PlayHistory
+import org.gamelauncher.data.ThemeStore
 import org.gamelauncher.data.PlayNewsRepository
+import org.gamelauncher.data.RunningApp
+import org.gamelauncher.data.TitleDetailsRepository
 import org.gamelauncher.data.findEntry
 import org.gamelauncher.ui.chrome.ApplySystemBarMode
 import org.gamelauncher.ui.chrome.CommandBar
@@ -59,26 +70,49 @@ import org.gamelauncher.ui.settings.SettingsScreen
 import org.gamelauncher.ui.store.StoreScreen
 import org.gamelauncher.ui.theme.Background
 import org.gamelauncher.ui.theme.GameLauncherTheme
+import org.gamelauncher.ui.theme.ProvideFrost
+import org.gamelauncher.ui.theme.frostSource
+import org.gamelauncher.ui.theme.rememberLauncherHazeState
 
 @Composable
 fun LauncherApp(onClose: () -> Unit) {
-    GameLauncherTheme {
+    val context = LocalContext.current
+    val themeStore = remember(context) { ThemeStore(context) }
+    val theme by themeStore.resolved.collectAsState()
+    GameLauncherTheme(theme) {
         val context = LocalContext.current
         val snapshot = remember(context) { InstalledCatalog.load(context) }
         val newsRepo = remember(context) { PlayNewsRepository(context) }
         val artwork = remember(context) { ArtworkRepository(context, newsRepo) }
         val settings = remember(context) { LauncherSettings(context) }
         val prefs by settings.state.collectAsState()
+        val playHistory = remember(context) { PlayHistory(context) }
+        val collections = remember(context) { CollectionsStore(context) }
+        val details = remember(context) { TitleDetailsRepository(context, newsRepo) }
         val news by newsRepo.news.collectAsState()
         val newsLoading by newsRepo.loading.collectAsState()
-        LaunchedEffect(snapshot) { newsRepo.refresh(snapshot) }
-        LaunchedEffect(news) { artwork.onPlayArtUpdated() }
         var stack by remember { mutableStateOf(listOf<Screen>(Screen.Home)) }
         var menuOpen by remember { mutableStateOf(false) }
         var userMenuOpen by remember { mutableStateOf(false) }
         var searchOpen by remember { mutableStateOf(false) }
         var searchQuery by remember { mutableStateOf("") }
+        val presence by AppPresence.snapshot.collectAsState()
+        var fallbackRunning by remember { mutableStateOf(emptyList<RunningApp>()) }
         val current = stack.last()
+        LaunchedEffect(snapshot) { newsRepo.refresh(snapshot) }
+        LaunchedEffect(news) { artwork.onPlayArtUpdated() }
+        LaunchedEffect(menuOpen, presence.open, presence.connected) {
+            fun refresh() {
+                fallbackRunning = GameSession.runningApps(context)
+            }
+            refresh()
+            if (!menuOpen) return@LaunchedEffect
+            while (true) {
+                kotlinx.coroutines.delay(1000)
+                refresh()
+            }
+        }
+        val running = fallbackRunning
 
         fun go(screen: Screen, root: Boolean = false) {
             menuOpen = false
@@ -152,8 +186,15 @@ fun LauncherApp(onClose: () -> Unit) {
         CompositionLocalProvider(
             LocalArtwork provides artwork,
             LocalSettings provides settings,
+            LocalPlayHistory provides playHistory,
+            LocalCollections provides collections,
+            LocalDetails provides details,
+            LocalThemeStore provides themeStore,
         ) {
-        Column(
+        val chrome = theme.chrome
+        val hazeState = rememberLauncherHazeState()
+        ProvideFrost(hazeState) {
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Background)
@@ -176,12 +217,11 @@ fun LauncherApp(onClose: () -> Unit) {
                     }
                 },
         ) {
-            Box(Modifier.weight(1f)) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(top = 52.dp),
-                ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .frostSource(),
+            ) {
                     when (val screen = current) {
                         Screen.Home -> HomeScreen(
                             snapshot,
@@ -206,57 +246,63 @@ fun LauncherApp(onClose: () -> Unit) {
                             go(Screen.Game(id))
                         }
                     }
-                    if (userMenuOpen) {
-                        DimScrim { userMenuOpen = false }
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(end = 12.dp, top = 8.dp),
-                        ) {
-                            UserMenu(
-                                onLauncherSettings = { go(Screen.Settings) },
-                                onCloseLauncher = onClose,
-                                onDismiss = { userMenuOpen = false },
-                            )
-                        }
-                    }
-                    if (menuOpen) {
-                        DimScrim { menuOpen = false }
-                        Box(Modifier.align(Alignment.CenterStart)) {
-                            SideMenu(current) { item ->
-                                when (item) {
-                                    MenuItem.Home -> go(Screen.Home, root = true)
-                                    MenuItem.Library -> go(Screen.Library)
-                                    MenuItem.Store -> go(Screen.Store)
-                                    MenuItem.Settings -> go(Screen.Settings)
-                                    MenuItem.Close -> onClose()
-                                    MenuItem.Friends, MenuItem.Media, MenuItem.Downloads -> Unit
-                                }
-                            }
-                        }
-                    }
-                }
-                TopStatusBar(
-                    searchOpen = searchOpen,
-                    searchQuery = searchQuery,
-                    onSearchQuery = { searchQuery = it },
-                    onToggleSearch = {
-                        searchOpen = !searchOpen
-                        if (!searchOpen) searchQuery = ""
-                        userMenuOpen = false
-                    },
-                    onUserMenu = {
-                        userMenuOpen = !userMenuOpen
-                        searchOpen = false
-                        searchQuery = ""
-                        menuOpen = false
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .windowInsetsPadding(rememberTopChromeInsets(freeform)),
-                )
             }
+            if (userMenuOpen) {
+                DimScrim { userMenuOpen = false }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = 12.dp, top = chrome.topBarHeight + 8.dp),
+                ) {
+                    UserMenu(
+                        onLauncherSettings = { go(Screen.Settings) },
+                        onCloseLauncher = onClose,
+                        onDismiss = { userMenuOpen = false },
+                    )
+                }
+            }
+            if (menuOpen) {
+                DimScrim { menuOpen = false }
+                Box(Modifier.align(Alignment.CenterStart)) {
+                    SideMenu(
+                        current = current,
+                        running = running,
+                        onSelect = { item ->
+                            when (item) {
+                                MenuItem.Home -> go(Screen.Home, root = true)
+                                MenuItem.Library -> go(Screen.Library)
+                                MenuItem.Store -> go(Screen.Store)
+                                MenuItem.Settings -> go(Screen.Settings)
+                                MenuItem.Close -> onClose()
+                            }
+                        },
+                        onSwitch = { app ->
+                            menuOpen = false
+                            GameSession.switchTo(context, app)
+                        },
+                    )
+                }
+            }
+            TopStatusBar(
+                searchOpen = searchOpen,
+                searchQuery = searchQuery,
+                onSearchQuery = { searchQuery = it },
+                onToggleSearch = {
+                    searchOpen = !searchOpen
+                    if (!searchOpen) searchQuery = ""
+                    userMenuOpen = false
+                },
+                onUserMenu = {
+                    userMenuOpen = !userMenuOpen
+                    searchOpen = false
+                    searchQuery = ""
+                    menuOpen = false
+                },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .windowInsetsPadding(rememberTopChromeInsets(freeform)),
+            )
             CommandBar(
                 hints,
                 onMenu = {
@@ -264,8 +310,12 @@ fun LauncherApp(onClose: () -> Unit) {
                     userMenuOpen = false
                 },
                 onBack = { back() },
-                modifier = Modifier.windowInsetsPadding(rememberBottomChromeInsets(freeform)),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .windowInsetsPadding(rememberBottomChromeInsets(freeform)),
             )
+        }
         }
         }
     }

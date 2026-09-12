@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -33,10 +34,11 @@ import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,18 +51,25 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
+import org.gamelauncher.data.AppPresence
+import org.gamelauncher.data.AppRunState
 import org.gamelauncher.data.Game
 import org.gamelauncher.data.GamePageTab
 import org.gamelauncher.data.GameSession
+import kotlin.math.roundToInt
 import org.gamelauncher.data.LocalArtwork
+import org.gamelauncher.data.LocalCollections
+import org.gamelauncher.data.LocalDetails
+import org.gamelauncher.data.LocalPlayHistory
+import org.gamelauncher.data.LocalTheme
+import org.gamelauncher.data.SteamNative
+import org.gamelauncher.data.TitleDetails
 import org.gamelauncher.ui.components.AmbientBackdrop
 import org.gamelauncher.ui.components.AppIconImage
 import org.gamelauncher.ui.components.ArtworkLayer
@@ -80,55 +89,80 @@ import org.gamelauncher.ui.theme.Tile
 @Composable
 fun GameScreen(game: Game) {
     var tab by remember { mutableStateOf(GamePageTab.Activity) }
-    var favorite by remember { mutableStateOf(false) }
+    val visibleTabs = LocalTheme.current.layouts.gameTabs()
+    LaunchedEffect(visibleTabs) {
+        if (tab !in visibleTabs) tab = visibleTabs.first()
+    }
+    var collectionsOpen by remember { mutableStateOf(false) }
     val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
+    val details = rememberTitleDetails(game)
+    val history = LocalPlayHistory.current
+    val historyEpoch by history.epoch.collectAsState()
+    val lastPlayed = remember(historyEpoch, game.packageName) { history.lastPlayedLabel(game.packageName) }
+    val playTime = remember(historyEpoch, game.packageName) { history.playTimeLabel(game.packageName) }
 
     Box(Modifier.fillMaxSize()) {
         AmbientBackdrop(artwork)
-        Column(Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(bottom = LocalTheme.current.chrome.bottomBarHeight),
+        ) {
             when (tab) {
-                GamePageTab.Activity -> ActivityPage(game, favorite, { favorite = !favorite }, { tab = it })
-                GamePageTab.Community -> CommunityPage(game) { tab = it }
-                GamePageTab.GameInfo -> GameInfoPage(game) { tab = it }
+                GamePageTab.Activity -> ActivityPage(
+                    game = game,
+                    details = details,
+                    lastPlayed = lastPlayed,
+                    playTime = playTime,
+                    onCollections = { collectionsOpen = true },
+                    onTab = { tab = it },
+                )
+                GamePageTab.Community -> CommunityPage(game, details) { tab = it }
+                GamePageTab.GameInfo -> GameInfoPage(game, details) { tab = it }
             }
+        }
+        if (collectionsOpen) {
+            CollectionPicker(game.packageName) { collectionsOpen = false }
         }
     }
 }
 
 @Composable
+private fun rememberTitleDetails(game: Game): TitleDetails {
+    val repo = LocalDetails.current
+    val steamId = SteamNative.steamAppId(game.packageName)
+    val epoch by repo.epoch.collectAsState()
+    val details by produceState(repo.peek(game.packageName) ?: TitleDetails(), game.packageName, epoch) {
+        value = repo.resolve(game.packageName, steamId)
+    }
+    return details
+}
+
+@Composable
 private fun ActivityPage(
     game: Game,
-    favorite: Boolean,
-    onFavorite: () -> Unit,
+    details: TitleDetails,
+    lastPlayed: String,
+    playTime: String,
+    onCollections: () -> Unit,
     onTab: (GamePageTab) -> Unit,
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    var running by remember(game.packageName) { mutableStateOf(false) }
+    val history = LocalPlayHistory.current
+    val presence by AppPresence.snapshot.collectAsState()
     val mapperInstalled = remember { GameSession.hasXtMapper(context) }
-
-    fun refreshRunning() {
-        when (val observed = GameSession.running(context, game.packageName)) {
-            true -> running = true
-            false -> running = false
-            null -> Unit
-        }
-    }
-
-    DisposableEffect(lifecycleOwner, game.packageName) {
-        refreshRunning()
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) refreshRunning()
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    LaunchedEffect(game.packageName) {
+    var amRunning by remember(game.packageName) { mutableStateOf(false) }
+    LaunchedEffect(game.packageName, presence.connected) {
+        if (presence.connected) return@LaunchedEffect
         while (true) {
+            amRunning = GameSession.running(context, game.packageName) == true
             delay(1500)
-            refreshRunning()
         }
+    }
+    val runState = when {
+        presence.connected -> AppPresence.state(game.packageName, presence)
+        amRunning -> AppRunState.Running
+        else -> AppRunState.Stopped
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -174,50 +208,64 @@ private fun ActivityPage(
                     .width(240.dp)
                     .height(56.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(if (running) StopRed else PlayGreen)
-                    .clickable {
-                        if (running) {
-                            GameSession.close(context, game.packageName)
-                            running = false
-                        } else if (GameSession.launch(context, game.packageName)) {
-                            running = true
+                    .background(
+                        when (runState) {
+                            AppRunState.Stopped -> PlayGreen
+                            AppRunState.Running -> StopRed
+                            AppRunState.Closing -> Color(0xFF8A6A32)
+                        },
+                    )
+                    .clickable(enabled = runState != AppRunState.Closing) {
+                        when (runState) {
+                            AppRunState.Stopped -> {
+                                if (GameSession.launch(context, game.packageName)) {
+                                    history.record(game.packageName)
+                                }
+                            }
+                            AppRunState.Running -> GameSession.close(context, game.packageName)
+                            AppRunState.Closing -> Unit
                         }
                     }
-                    .semantics { contentDescription = if (running) "Close" else "Play" }
+                    .semantics {
+                        contentDescription = when (runState) {
+                            AppRunState.Stopped -> "Play"
+                            AppRunState.Running -> "Running"
+                            AppRunState.Closing -> "Closing"
+                        }
+                    }
                     .padding(horizontal = 18.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = if (running) Icons.Default.Close else Icons.Default.PlayArrow,
+                    imageVector = if (runState == AppRunState.Stopped) {
+                        Icons.Default.PlayArrow
+                    } else {
+                        Icons.Default.Close
+                    },
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(32.dp),
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    if (running) "Close" else "Play",
+                    when (runState) {
+                        AppRunState.Stopped -> "Play"
+                        AppRunState.Running -> "Running"
+                        AppRunState.Closing -> "Closing"
+                    },
                     color = Color.White,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
             }
             Spacer(Modifier.width(28.dp))
-            Stat("Last Played", game.lastPlayed)
+            Stat("Last Played", lastPlayed)
             Spacer(Modifier.width(28.dp))
-            Stat("Play Time", game.playTime)
+            Stat("Play Time", playTime)
             Spacer(Modifier.width(28.dp))
             Column {
                 Text("RATING", color = TextMuted, fontSize = 11.sp, letterSpacing = 1.sp)
-                Row {
-                    repeat(5) { i ->
-                        Icon(
-                            imageVector = if (i < game.rating.toInt()) Icons.Default.Star else Icons.Outlined.Star,
-                            contentDescription = null,
-                            tint = TextPrimary,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
+                RatingStars(details.rating)
             }
             Spacer(Modifier.weight(1f))
             Glyph(
@@ -233,7 +281,7 @@ private fun ActivityPage(
                 description = "App info",
             )
             Spacer(Modifier.width(10.dp))
-            Glyph(Icons.Default.Star, onClick = onFavorite, filled = favorite, description = "Favorite")
+            Glyph(Icons.Default.Folder, onClick = onCollections, description = "Collections")
         }
         Spacer(Modifier.height(20.dp))
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -255,13 +303,13 @@ private fun ActivityPage(
             Spacer(Modifier.weight(1f))
             Icon(Icons.Default.Person, contentDescription = null, tint = TextPrimary)
             Spacer(Modifier.width(6.dp))
-            Text(game.players, color = TextPrimary, fontSize = 15.sp)
+            Text(if (details.players.isNotBlank()) details.players else game.players, color = TextPrimary, fontSize = 15.sp)
         }
     }
 }
 
 @Composable
-private fun CommunityPage(game: Game, onTab: (GamePageTab) -> Unit) {
+private fun CommunityPage(game: Game, details: TitleDetails, onTab: (GamePageTab) -> Unit) {
     val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
     Column(
         Modifier
@@ -271,48 +319,46 @@ private fun CommunityPage(game: Game, onTab: (GamePageTab) -> Unit) {
         ShoulderTabs(GamePageTab.Community, onTab)
         Spacer(Modifier.height(28.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Average Review: ${game.rating}", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            Text("Average Review: ${if (details.rating > 0f) String.format("%.1f", details.rating) else "—"}", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.width(16.dp))
-            repeat(5) { i ->
-                Icon(
-                    imageVector = if (i < game.rating.toInt()) Icons.Default.Star else Icons.Outlined.Star,
-                    contentDescription = null,
-                    tint = TextPrimary,
-                )
-            }
+            RatingStars(details.rating, 22.dp)
         }
         Spacer(Modifier.height(22.dp))
         Text("Screenshots", color = TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(12.dp))
+        val shots = details.screenshots.ifEmpty {
+            listOfNotNull(artwork.heroUrl ?: artwork.coverUrl)
+        }
+        if (shots.isEmpty()) {
+            Text("No screenshots yet", color = TextMuted, fontSize = 16.sp)
+        } else {
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            listOf(0, 1, 2).forEach { index ->
-                val url = artwork.heroUrl ?: artwork.coverUrl
+            shots.take(6).forEach { url ->
                 Box(
                     modifier = Modifier
                         .width(320.dp)
                         .height(200.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(hueBrush(game.coverHue + index * 30f, portrait = false)),
+                        .background(hueBrush(game.coverHue, portrait = false)),
                 ) {
-                    if (url != null) {
-                        AsyncImage(
-                            model = url,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
+                    AsyncImage(
+                        model = url,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
             }
+        }
         }
     }
 }
 
 @Composable
-private fun GameInfoPage(game: Game, onTab: (GamePageTab) -> Unit) {
+private fun GameInfoPage(game: Game, details: TitleDetails, onTab: (GamePageTab) -> Unit) {
     val context = LocalContext.current
     val repo = LocalArtwork.current
     var showChangeId by remember { mutableStateOf(false) }
@@ -339,24 +385,28 @@ private fun GameInfoPage(game: Game, onTab: (GamePageTab) -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(game.title, color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(6.dp))
-                Text(game.summary, color = TextPrimary, fontSize = 16.sp)
+                Text(
+                    details.summary.ifBlank { game.summary },
+                    color = TextPrimary,
+                    fontSize = 16.sp,
+                )
                 Spacer(Modifier.height(22.dp))
-                MetaLine("Developer", game.developer)
-                MetaLine("Publisher", game.publisher)
-                MetaLine("Category", game.category)
-                MetaLine("Release Date", game.releaseDate)
+                MetaLine("Developer", details.developer.ifBlank { game.developer })
+                MetaLine("Publisher", details.publisher.ifBlank { game.publisher })
+                MetaLine("Category", details.category.ifBlank { game.category })
+                MetaLine("Release Date", details.releaseDate.ifBlank { game.releaseDate })
             }
             Column(horizontalAlignment = Alignment.End) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Person, contentDescription = null, tint = TextPrimary)
                     Spacer(Modifier.width(8.dp))
-                    Text(game.players, color = TextPrimary)
+                    Text(if (details.players.isNotBlank()) details.players else game.players, color = TextPrimary)
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.SportsEsports, contentDescription = null, tint = TextPrimary)
                     Spacer(Modifier.width(8.dp))
-                    Text(game.controller, color = TextPrimary)
+                    Text(if (details.controller.isNotBlank()) details.controller else game.controller, color = TextPrimary)
                 }
             }
         }
@@ -445,32 +495,100 @@ private fun ChangeIdSheet(
 
 @Composable
 private fun ShoulderTabs(selected: GamePageTab, onTab: (GamePageTab) -> Unit) {
+    val values = LocalTheme.current.layouts.gameTabs()
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         ShoulderKey("L1") {
-            val values = GamePageTab.entries
-            onTab(values[(selected.ordinal - 1 + values.size) % values.size])
+            val i = values.indexOf(selected).let { if (it < 0) 0 else it }
+            onTab(values[(i - 1 + values.size) % values.size])
         }
         Spacer(Modifier.weight(1f))
-        CenteredTabs(selected, onTab)
+        CenteredTabs(selected, onTab, values)
         Spacer(Modifier.weight(1f))
         ShoulderKey("R1") {
-            val values = GamePageTab.entries
-            onTab(values[(selected.ordinal + 1) % values.size])
+            val i = values.indexOf(selected).let { if (it < 0) 0 else it }
+            onTab(values[(i + 1) % values.size])
         }
     }
 }
 
 @Composable
-private fun CenteredTabs(selected: GamePageTab, onTab: (GamePageTab) -> Unit) {
+private fun CenteredTabs(
+    selected: GamePageTab,
+    onTab: (GamePageTab) -> Unit,
+    values: List<GamePageTab> = LocalTheme.current.layouts.gameTabs(),
+) {
     Row(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SteamPill("Activity", selected == GamePageTab.Activity) { onTab(GamePageTab.Activity) }
-        Spacer(Modifier.width(24.dp))
-        SteamPill("Community", selected == GamePageTab.Community) { onTab(GamePageTab.Community) }
-        Spacer(Modifier.width(24.dp))
-        SteamPill("Game Info", selected == GamePageTab.GameInfo) { onTab(GamePageTab.GameInfo) }
+        values.forEachIndexed { index, tab ->
+            if (index > 0) Spacer(Modifier.width(24.dp))
+            val label = when (tab) {
+                GamePageTab.Activity -> "Activity"
+                GamePageTab.Community -> "Community"
+                GamePageTab.GameInfo -> "Game Info"
+            }
+            SteamPill(label, selected == tab) { onTab(tab) }
+        }
+    }
+}
+
+@Composable
+private fun RatingStars(rating: Float, size: Dp = 18.dp) {
+    val filled = rating.roundToInt().coerceIn(0, 5)
+    Row {
+        repeat(5) { i ->
+            Icon(
+                imageVector = if (i < filled) Icons.Default.Star else Icons.Outlined.Star,
+                contentDescription = null,
+                tint = TextPrimary,
+                modifier = Modifier.size(size),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CollectionPicker(packageName: String, onDismiss: () -> Unit) {
+    val store = LocalCollections.current
+    val collections by store.state.collectAsState()
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .width(420.dp)
+                .background(Tile, RoundedCornerShape(6.dp))
+                .padding(24.dp),
+        ) {
+            Text("Collections", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(12.dp))
+            collections.forEach { collection ->
+                val included = collection.contains(packageName)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { store.toggle(collection.id, packageName) }
+                        .padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        if (included) "Added" else "Add",
+                        color = if (included) PlayGreen else TextMuted,
+                        fontSize = 14.sp,
+                        modifier = Modifier.width(64.dp),
+                    )
+                    Text(collection.name, color = TextPrimary, fontSize = 16.sp)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Done",
+                color = PlayGreen,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .clickable(onClick = onDismiss)
+                    .padding(8.dp),
+            )
+        }
     }
 }
 

@@ -6,9 +6,14 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,27 +33,38 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.gamelauncher.data.CloseGameService
+import org.gamelauncher.data.GameSession
 import org.gamelauncher.data.LocalArtwork
 import org.gamelauncher.data.LocalSettings
+import org.gamelauncher.data.LocalThemeStore
+import org.gamelauncher.data.ThemeBlurLevel
+import org.gamelauncher.data.ThemeIconStyle
+import org.gamelauncher.data.toIni
 import org.gamelauncher.data.isDefaultHomeApp
 import org.gamelauncher.data.rememberResumeTick
 import org.gamelauncher.data.RecentsArt
 import org.gamelauncher.data.RecentsLayout
 import org.gamelauncher.data.RecentsShape
 import org.gamelauncher.data.RecentsSize
+import org.gamelauncher.data.StoreApps
 import org.gamelauncher.ui.components.SteamPill
 import org.gamelauncher.ui.components.tileClick
 import org.gamelauncher.ui.components.tileFrame
 import org.gamelauncher.ui.theme.Background
 import org.gamelauncher.ui.theme.PlayGreen
+import org.gamelauncher.ui.theme.StopRed
 import org.gamelauncher.ui.theme.TextMuted
 import org.gamelauncher.ui.theme.TextPrimary
 import org.gamelauncher.ui.theme.Tile
+import org.gamelauncher.ui.theme.chromeContentPadding
+import org.gamelauncher.ui.theme.label
 
 @Composable
 fun SettingsScreen() {
@@ -60,16 +76,300 @@ fun SettingsScreen() {
     val resumeTick = rememberResumeTick()
     val isDefaultHome = remember(resumeTick) { isDefaultHomeApp(context) }
     val accessibilityOn = remember(resumeTick) { CloseGameService.isEnabled(context) }
+    val usageOn = remember(resumeTick) { GameSession.hasUsageAccess(context) }
+    val stores = remember(resumeTick) { StoreApps.installed(context) }
+    val themeStore = LocalThemeStore.current
+    val theme by themeStore.resolved.collectAsState()
+    val themeEntries by themeStore.entries.collectAsState()
+    val importTheme = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { themeStore.importFrom(it) }
+    }
+    val exportTheme = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain"),
+    ) { uri ->
+        uri?.let { dest ->
+            context.contentResolver.openOutputStream(dest)?.use { it.write(theme.toIni().toByteArray()) }
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 28.dp, vertical = 20.dp),
+            .chromeContentPadding(extraTop = 20.dp, extraBottom = 20.dp, horizontal = 28.dp),
     ) {
         Text("Settings", color = TextPrimary, fontSize = 24.sp)
         Spacer(Modifier.height(18.dp))
+
+        SettingsCard("Themes") {
+            Text(
+                "Enable packs to stack them on Default. Later packs win. Import a .ini or .cfg, or export the current mix.",
+                color = TextMuted,
+                fontSize = 13.sp,
+            )
+            Spacer(Modifier.height(12.dp))
+            themeEntries.forEach { entry ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) {
+                        val suffix = when {
+                            entry.id == "default" -> "  · always on"
+                            entry.builtin -> "  · built-in"
+                            entry.author.isNotBlank() -> "  · ${entry.author}"
+                            else -> ""
+                        }
+                        SettingToggle(
+                            label = entry.name + suffix,
+                            checked = entry.enabled,
+                        ) {
+                            if (entry.id != "default") themeStore.toggle(entry.id)
+                        }
+                    }
+                    if (!entry.builtin) {
+                        Text(
+                            "Remove",
+                            color = StopRed,
+                            fontSize = 14.sp,
+                            modifier = Modifier
+                                .padding(start = 8.dp)
+                                .tileClick { themeStore.delete(entry.id) }
+                                .padding(horizontal = 8.dp, vertical = 10.dp),
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Import .ini",
+                    color = PlayGreen,
+                    fontSize = 15.sp,
+                    modifier = Modifier
+                        .tileFrame(false, RoundedCornerShape(4.dp), width = 2.dp)
+                        .tileClick { importTheme.launch("*/*") }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+                Text(
+                    "Export current",
+                    color = TextPrimary,
+                    fontSize = 15.sp,
+                    modifier = Modifier
+                        .tileFrame(false, RoundedCornerShape(4.dp), width = 2.dp)
+                        .tileClick { exportTheme.launch("launcher-theme.ini") }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+            }
+        }
+
+        SettingsCard("Bars") {
+            ChoiceRow(
+                "Top bar",
+                listOf(40 to "Compact", 52 to "Regular", 64 to "Tall", 80 to "Large"),
+                theme.chrome.topBarHeight.value.toInt(),
+            ) { value ->
+                themeStore.patchCustom { pack ->
+                    pack.copy(chrome = pack.chrome.copy(topBarHeight = value.dp))
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "Bottom bar",
+                listOf(44 to "Compact", 56 to "Regular", 68 to "Tall", 84 to "Large"),
+                theme.chrome.bottomBarHeight.value.toInt(),
+            ) { value ->
+                themeStore.patchCustom { pack ->
+                    pack.copy(chrome = pack.chrome.copy(bottomBarHeight = value.dp))
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "Top opacity",
+                listOf(100 to "100%", 85 to "85%", 70 to "70%", 50 to "50%"),
+                nearest(theme.chrome.topAlpha, listOf(100, 85, 70, 50)),
+            ) { value ->
+                themeStore.patchCustom { pack ->
+                    pack.copy(chrome = pack.chrome.copy(topAlpha = value / 100f))
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "Bottom opacity",
+                listOf(100 to "100%", 85 to "85%", 70 to "70%", 50 to "50%"),
+                nearest(theme.chrome.bottomAlpha, listOf(100, 85, 70, 50)),
+            ) { value ->
+                themeStore.patchCustom { pack ->
+                    pack.copy(chrome = pack.chrome.copy(bottomAlpha = value / 100f))
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "Bar color",
+                listOf(
+                    0xFF000000.toInt() to "Black",
+                    0xFF0E1820.toInt() to "Navy",
+                    0xFF2B333C.toInt() to "Steel",
+                ),
+                theme.colors.topBar.toArgb(),
+            ) { argb ->
+                val color = Color(argb)
+                themeStore.patchCustom { pack ->
+                    pack.copy(colors = pack.colors.copy(topBar = color, footer = color))
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "Menu opacity",
+                listOf(100 to "100%", 85 to "85%", 70 to "70%", 50 to "50%"),
+                nearest(theme.chrome.menuAlpha, listOf(100, 85, 70, 50)),
+            ) { value ->
+                themeStore.patchCustom { pack ->
+                    pack.copy(chrome = pack.chrome.copy(menuAlpha = value / 100f))
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "Blur",
+                ThemeBlurLevel.entries.map { it to it.label() },
+                theme.chrome.blurLevel,
+            ) { level ->
+                themeStore.patchCustom { pack ->
+                    pack.copy(
+                        chrome = pack.chrome.copy(
+                            blur = level.enabled,
+                            blurRadius = level.radius,
+                        ),
+                    )
+                }
+            }
+            Text(
+                "Blur frosts the page behind bars, menus, and dim overlays. Drop opacity below 100% to see it.",
+                color = TextMuted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+
+        SettingsCard("Borders & icons") {
+            ChoiceRow(
+                "Border",
+                listOf(2 to "Thin", 4 to "Regular", 6 to "Thick"),
+                theme.borders.width.value.toInt().let { n ->
+                    listOf(2, 4, 6).minBy { kotlin.math.abs(it - n) }
+                },
+            ) { value ->
+                themeStore.patchCustom { pack ->
+                    pack.copy(borders = pack.borders.copy(width = value.dp))
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "Corners",
+                listOf(2 to "Sharp", 6 to "Regular", 12 to "Round"),
+                theme.borders.radius.value.toInt().let { n ->
+                    listOf(2, 6, 12).minBy { kotlin.math.abs(it - n) }
+                },
+            ) { value ->
+                themeStore.patchCustom { pack ->
+                    pack.copy(borders = pack.borders.copy(radius = value.dp))
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "Border color",
+                listOf(
+                    0xFFFFFFFF.toInt() to "White",
+                    0xFF5CB030.toInt() to "Accent",
+                    0xFF8A939C.toInt() to "Muted",
+                ),
+                theme.borders.color.toArgb(),
+            ) { argb ->
+                themeStore.patchCustom { pack ->
+                    pack.copy(borders = pack.borders.copy(color = Color(argb)))
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "Icons",
+                listOf(ThemeIconStyle.Filled to "Filled", ThemeIconStyle.Outlined to "Outlined"),
+                theme.icons.style,
+            ) { value ->
+                themeStore.patchCustom { pack ->
+                    pack.copy(icons = pack.icons.copy(style = value))
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "Icon tint",
+                listOf(
+                    0xFFFFFFFF.toInt() to "White",
+                    0xFF5CB030.toInt() to "Accent",
+                    0xFF8A939C.toInt() to "Muted",
+                ),
+                theme.icons.tint.toArgb(),
+            ) { argb ->
+                themeStore.patchCustom { pack ->
+                    pack.copy(icons = pack.icons.copy(tint = Color(argb)))
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "Accent",
+                listOf(
+                    0xFF5CB030.toInt() to "Green",
+                    0xFF4EA0F3.toInt() to "Blue",
+                    0xFFE39B2E.toInt() to "Amber",
+                    0xFFE85D4C.toInt() to "Red",
+                ),
+                theme.colors.playGreen.toArgb(),
+            ) { argb ->
+                themeStore.patchCustom { pack ->
+                    pack.copy(colors = pack.colors.copy(playGreen = Color(argb)))
+                }
+            }
+        }
+
+        SettingsCard("Pages") {
+            Text("Home", color = TextPrimary, fontSize = 15.sp)
+            SettingToggle("Last played", theme.layouts.homeLastPlayed) {
+                themeStore.patchCustom { pack ->
+                    pack.copy(layouts = pack.layouts.copy(homeLastPlayed = !pack.layouts.homeLastPlayed))
+                }
+            }
+            SettingToggle("Play now", theme.layouts.homePlayNow) {
+                themeStore.patchCustom { pack ->
+                    pack.copy(layouts = pack.layouts.copy(homePlayNow = !pack.layouts.homePlayNow))
+                }
+            }
+            SettingToggle("What's New / Favorites / Recommended", theme.layouts.homeFeed) {
+                themeStore.patchCustom { pack ->
+                    pack.copy(layouts = pack.layouts.copy(homeFeed = !pack.layouts.homeFeed))
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text("Library", color = TextPrimary, fontSize = 15.sp)
+            SettingToggle("Collections tab", theme.layouts.libraryCollections) {
+                themeStore.patchCustom { pack ->
+                    pack.copy(layouts = pack.layouts.copy(libraryCollections = !pack.layouts.libraryCollections))
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text("Game page", color = TextPrimary, fontSize = 15.sp)
+            SettingToggle("Activity", theme.layouts.gameActivity) {
+                themeStore.patchCustom { pack ->
+                    pack.copy(layouts = pack.layouts.copy(gameActivity = !pack.layouts.gameActivity))
+                }
+            }
+            SettingToggle("Community", theme.layouts.gameCommunity) {
+                themeStore.patchCustom { pack ->
+                    pack.copy(layouts = pack.layouts.copy(gameCommunity = !pack.layouts.gameCommunity))
+                }
+            }
+            SettingToggle("Game Info", theme.layouts.gameInfo) {
+                themeStore.patchCustom { pack ->
+                    pack.copy(layouts = pack.layouts.copy(gameInfo = !pack.layouts.gameInfo))
+                }
+            }
+        }
 
         SettingsCard("Recents") {
             ChoiceRow(
@@ -104,9 +404,6 @@ fun SettingsScreen() {
             SettingToggle("Show title under Recents", prefs.showSelectedTitle) {
                 settings.update { p -> p.copy(showSelectedTitle = !p.showSelectedTitle) }
             }
-        }
-
-        SettingsCard("Appearance") {
             SettingToggle("Ambient backdrop", prefs.ambientBackdrop) {
                 settings.update { p -> p.copy(ambientBackdrop = !p.ambientBackdrop) }
             }
@@ -124,6 +421,23 @@ fun SettingsScreen() {
             }
         }
 
+        SettingsCard("Store") {
+            if (stores.isEmpty()) {
+                Text(
+                    "No store app installed. Add Play Store, Aurora Store, Droid-ify, or Neo Store.",
+                    color = TextMuted,
+                    fontSize = 14.sp,
+                )
+            } else {
+                val selected = prefs.storePackage.takeIf { pkg -> stores.any { it.packageName == pkg } }.orEmpty()
+                ChoiceRow(
+                    "Open with",
+                    listOf("" to "Ask each time") + stores.map { it.packageName to it.label },
+                    selected,
+                ) { settings.update { p -> p.copy(storePackage = it) } }
+            }
+        }
+
         SettingsCard("Permissions") {
             PermissionRow(
                 title = "Default Home launcher",
@@ -136,6 +450,12 @@ fun SettingsScreen() {
                 status = if (accessibilityOn) "Enabled" else "Off",
                 action = "Open",
             ) { openAccessibilitySettings(context) }
+            Spacer(Modifier.height(10.dp))
+            PermissionRow(
+                title = "Usage access (running apps)",
+                status = if (usageOn) "Enabled" else "Off",
+                action = "Open",
+            ) { GameSession.openUsageAccessSettings(context) }
         }
 
         SettingsCard("SteamGridDB") {
@@ -236,6 +556,7 @@ private fun SettingsCard(title: String, content: @Composable () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun <T> ChoiceRow(
     label: String,
@@ -245,9 +566,9 @@ private fun <T> ChoiceRow(
 ) {
     Text(label, color = TextMuted, fontSize = 13.sp)
     Spacer(Modifier.height(8.dp))
-    Row(
+    FlowRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         options.forEach { (value, title) ->
             SteamPill(title, selected == value) { onSelect(value) }
@@ -310,4 +631,9 @@ private fun openAccessibilitySettings(context: Context) {
     runCatching {
         context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
     }
+}
+
+private fun nearest(alpha: Float, options: List<Int>): Int {
+    val n = (alpha * 100f).toInt()
+    return options.minBy { kotlin.math.abs(it - n) }
 }

@@ -52,6 +52,7 @@ import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
 import org.gamelauncher.data.Artwork
 import org.gamelauncher.data.LocalArtwork
+import org.gamelauncher.data.LocalTheme
 import org.gamelauncher.ui.theme.Pill
 import org.gamelauncher.ui.theme.TextMuted
 import org.gamelauncher.ui.theme.TextPrimary
@@ -364,16 +365,20 @@ fun Modifier.tileFrame(
     selected: Boolean,
     shape: RoundedCornerShape,
     onFocused: () -> Unit = {},
-    width: Dp = 4.dp,
-    color: Color = TileBorder,
+    width: Dp? = null,
+    color: Color? = null,
 ): Modifier = composed {
+    val theme = LocalTheme.current
+    val stroke = width ?: theme.borders.width
+    val strokeColor = color ?: theme.borders.color
+    val frameShape = RoundedCornerShape(theme.borders.radius)
     var focused by remember { mutableStateOf(false) }
     onFocusChanged {
         focused = it.isFocused
         if (it.isFocused) onFocused()
     }
-        .clip(shape)
-        .then(if (selected || focused) Modifier.border(width, color, shape) else Modifier)
+        .clip(frameShape)
+        .then(if (selected || focused) Modifier.border(stroke, strokeColor, frameShape) else Modifier)
 }
 
 @OptIn(ExperimentalComposeUiApi::class)

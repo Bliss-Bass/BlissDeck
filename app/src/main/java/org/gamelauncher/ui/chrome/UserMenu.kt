@@ -3,7 +3,6 @@ package org.gamelauncher.ui.chrome
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,9 +34,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.gamelauncher.data.rememberIsDefaultHome
+import org.gamelauncher.data.LocalTheme
 import org.gamelauncher.ui.theme.Menu
 import org.gamelauncher.ui.theme.TextMuted
 import org.gamelauncher.ui.theme.TextPrimary
+import org.gamelauncher.ui.theme.frosted
 
 @Composable
 fun UserMenu(
@@ -52,11 +53,12 @@ fun UserMenu(
         }.getOrNull().orEmpty().ifBlank { "dev" }
     }
     val isDefaultHome = rememberIsDefaultHome()
+    val menuColor = Menu.copy(alpha = LocalTheme.current.chrome.menuAlpha)
     Column(
         modifier = Modifier
             .width(300.dp)
             .clip(RoundedCornerShape(6.dp))
-            .background(Menu)
+            .frosted(menuColor)
             .padding(vertical = 10.dp),
     ) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
