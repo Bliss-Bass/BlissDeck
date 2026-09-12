@@ -33,6 +33,7 @@ data class LauncherPrefs(
     val bAsBack: Boolean = true,
     val winOpensMenu: Boolean = true,
     val hoverCaptions: Boolean = true,
+    val showNotificationCount: Boolean = true,
     val whatsNewCount: Int = 16,
     val storePackage: String = "",
     val iconSource: ArtworkIconSource = ArtworkIconSource.App,
@@ -84,6 +85,7 @@ class LauncherSettings(context: Context) {
         bAsBack = prefs.getBoolean(KEY_B, true),
         winOpensMenu = prefs.getBoolean(KEY_WIN, true),
         hoverCaptions = prefs.getBoolean(KEY_HOVER, true),
+        showNotificationCount = prefs.getBoolean(KEY_NOTIF, true),
         whatsNewCount = prefs.getInt(KEY_NEWS_COUNT, 16).coerceIn(8, 32),
         storePackage = prefs.getString(KEY_STORE, "").orEmpty(),
         iconSource = enumValue(prefs.getString(KEY_ICON_SOURCE, null), ArtworkIconSource.App),
@@ -104,6 +106,7 @@ class LauncherSettings(context: Context) {
             .putBoolean(KEY_B, value.bAsBack)
             .putBoolean(KEY_WIN, value.winOpensMenu)
             .putBoolean(KEY_HOVER, value.hoverCaptions)
+            .putBoolean(KEY_NOTIF, value.showNotificationCount)
             .putInt(KEY_NEWS_COUNT, value.whatsNewCount)
             .putString(KEY_STORE, value.storePackage)
             .putString(KEY_ICON_SOURCE, value.iconSource.name)
@@ -124,6 +127,7 @@ class LauncherSettings(context: Context) {
         const val KEY_B = "b_as_back"
         const val KEY_WIN = "win_opens_menu"
         const val KEY_HOVER = "hover_captions"
+        const val KEY_NOTIF = "show_notification_count"
         const val KEY_NEWS_COUNT = "whats_new_count"
         const val KEY_STORE = "store_package"
         const val KEY_ICON_SOURCE = "artwork_icon_source"

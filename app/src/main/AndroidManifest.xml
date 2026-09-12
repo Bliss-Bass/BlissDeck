@@ -61,5 +61,17 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/close_game_service" />
         </service>
+        <service
+            android:name=".data.NotificationCountService"
+            android:exported="true"
+            android:label="@string/notification_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.notification.default_filter_types"
+                android:value="conversations|alerting|silent|ongoing" />
+        </service>
     </application>
 </manifest>

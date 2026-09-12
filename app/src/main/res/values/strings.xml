@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">Game Launcher</string>
     <string name="close_game_service_description">Lets Game Launcher see which games are open, close them from the game page, and switch to them from the sidebar. This includes freeform windows.</string>
+    <string name="notification_listener_label">Notification count</string>
 </resources>

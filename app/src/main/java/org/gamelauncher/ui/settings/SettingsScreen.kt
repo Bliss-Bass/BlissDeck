@@ -57,6 +57,7 @@ import org.gamelauncher.data.LocalAccountPhoto
 import org.gamelauncher.data.LocalArtwork
 import org.gamelauncher.data.LocalSettings
 import org.gamelauncher.data.LocalThemeStore
+import org.gamelauncher.data.NotificationCountService
 import org.gamelauncher.data.ThemeBlurLevel
 import org.gamelauncher.data.ThemeIconStyle
 import org.gamelauncher.data.toIni
@@ -90,6 +91,7 @@ fun SettingsScreen() {
     val isDefaultHome = remember(resumeTick) { isDefaultHomeApp(context) }
     val accessibilityOn = remember(resumeTick) { CloseGameService.isEnabled(context) }
     val usageOn = remember(resumeTick) { GameSession.hasUsageAccess(context) }
+    val notificationOn = remember(resumeTick) { NotificationCountService.isEnabled(context) }
     val stores = remember(resumeTick) { StoreApps.installed(context) }
     val themeStore = LocalThemeStore.current
     val theme by themeStore.resolved.collectAsState()
@@ -319,6 +321,10 @@ fun SettingsScreen() {
                 fontSize = 13.sp,
                 modifier = Modifier.padding(top = 8.dp),
             )
+            Spacer(Modifier.height(8.dp))
+            SettingToggle("Show notification count", prefs.showNotificationCount) {
+                settings.update { p -> p.copy(showNotificationCount = !p.showNotificationCount) }
+            }
         }
 
         SettingsCard("Borders & icons") {
@@ -537,6 +543,12 @@ fun SettingsScreen() {
                 status = if (usageOn) "Enabled" else "Off",
                 action = "Open",
             ) { GameSession.openUsageAccessSettings(context) }
+            Spacer(Modifier.height(10.dp))
+            PermissionRow(
+                title = "Notification access (count)",
+                status = if (notificationOn) "Enabled" else "Off",
+                action = "Open",
+            ) { NotificationCountService.openSettings(context) }
         }
 
         SettingsCard("SteamGridDB") {

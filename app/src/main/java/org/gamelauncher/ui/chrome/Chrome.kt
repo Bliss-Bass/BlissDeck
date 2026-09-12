@@ -33,6 +33,9 @@ import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsNone
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SettingsEthernet
@@ -76,7 +79,9 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import org.gamelauncher.data.GameSession
 import org.gamelauncher.data.LocalAccountPhoto
+import org.gamelauncher.data.LocalSettings
 import org.gamelauncher.data.LocalTheme
+import org.gamelauncher.data.rememberNotificationStatus
 import org.gamelauncher.data.RunningApp
 import org.gamelauncher.data.ThemeIconStyle
 import org.gamelauncher.data.rememberIsDefaultHome
@@ -120,6 +125,8 @@ fun TopStatusBar(
 ) {
     val context = LocalContext.current
     val status = rememberDeviceStatus()
+    val notifications = rememberNotificationStatus()
+    val prefs by LocalSettings.current.state.collectAsState()
     val focusRequester = remember { FocusRequester() }
     var clock by remember { mutableStateOf(nowLabel()) }
     LaunchedEffect(Unit) {
@@ -217,6 +224,29 @@ fun TopStatusBar(
             badge = "${status.batteryPercent}%",
             onClick = { expandNotificationShade(context) },
         )
+        if (prefs.showNotificationCount) {
+            Spacer(Modifier.width(4.dp))
+            TopBarIcon(
+                icon = when {
+                    !notifications.enabled -> Icons.Default.NotificationsOff
+                    notifications.count <= 0 -> Icons.Default.NotificationsNone
+                    else -> Icons.Default.Notifications
+                },
+                label = when {
+                    !notifications.enabled -> "Notification access off. Enable it in Settings."
+                    notifications.count <= 0 -> "No notifications"
+                    notifications.count == 1 -> "1 notification"
+                    else -> "${notifications.count} notifications"
+                },
+                tint = iconTint,
+                badge = if (notifications.enabled) {
+                    if (notifications.count > 99) "99+" else notifications.count.toString()
+                } else {
+                    null
+                },
+                onClick = { expandNotificationShade(context) },
+            )
+        }
         Spacer(Modifier.width(8.dp))
         Text(
             clock,
