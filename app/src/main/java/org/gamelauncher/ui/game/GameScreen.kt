@@ -114,17 +114,29 @@ fun GameScreen(game: Game) {
                 .fillMaxSize()
                 .padding(bottom = LocalTheme.current.chrome.bottomBarHeight),
         ) {
-            when (tab) {
-                GamePageTab.Activity -> ActivityPage(
-                    game = game,
-                    details = details,
-                    lastPlayed = lastPlayed,
-                    playTime = playTime,
-                    onCollections = { collectionsOpen = true },
-                    onTab = { tab = it },
-                )
-                GamePageTab.Community -> CommunityPage(game, details) { tab = it }
-                GamePageTab.GameInfo -> GameInfoPage(game, details) { tab = it }
+            GameHero(game, artwork)
+            GamePlayBar(
+                game = game,
+                details = details,
+                lastPlayed = lastPlayed,
+                playTime = playTime,
+                onCollections = { collectionsOpen = true },
+            )
+            Spacer(Modifier.height(20.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+            ) {
+                ShoulderTabs(tab) { tab = it }
+            }
+            Spacer(Modifier.height(16.dp))
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                when (tab) {
+                    GamePageTab.Activity -> ActivityPane(game, details)
+                    GamePageTab.Community -> CommunityPane(game, details)
+                    GamePageTab.GameInfo -> GameInfoPane(game, details)
+                }
             }
         }
         if (collectionsOpen) {
@@ -145,13 +157,43 @@ private fun rememberTitleDetails(game: Game): TitleDetails {
 }
 
 @Composable
-private fun ActivityPage(
+private fun GameHero(game: Game, artwork: Artwork) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(280.dp)
+            .background(hueBrush(game.coverHue, portrait = false)),
+        contentAlignment = Alignment.Center,
+    ) {
+        ArtworkLayer(artwork, landscape = true)
+        GameIcon(
+            artwork,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 24.dp, bottom = 18.dp)
+                .size(84.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(14.dp)),
+        )
+        if (artwork.imageUrl(true) == null) {
+            Text(
+                game.title.uppercase(),
+                color = Color.White,
+                fontSize = 42.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 2.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun GamePlayBar(
     game: Game,
     details: TitleDetails,
     lastPlayed: String,
     playTime: String,
     onCollections: () -> Unit,
-    onTab: (GamePageTab) -> Unit,
 ) {
     val context = LocalContext.current
     val history = LocalPlayHistory.current
@@ -171,157 +213,125 @@ private fun ActivityPage(
         else -> AppRunState.Stopped
     }
 
-    Column(Modifier.fillMaxSize()) {
-        val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(280.dp)
-                .background(hueBrush(game.coverHue, portrait = false)),
-            contentAlignment = Alignment.Center,
-        ) {
-            ArtworkLayer(artwork, landscape = true)
-            GameIcon(
-                artwork,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 24.dp, bottom = 18.dp)
-                    .size(84.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .border(1.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(14.dp)),
-            )
-            if (artwork.imageUrl(true) == null) {
-                Text(
-                    game.title.uppercase(),
-                    color = Color.White,
-                    fontSize = 42.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 2.sp,
-                )
-            }
-        }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Footer)
+            .padding(horizontal = 24.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(Footer)
-                .padding(horizontal = 24.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                modifier = Modifier
-                    .width(240.dp)
-                    .height(56.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(
-                        when (runState) {
-                            AppRunState.Stopped -> PlayGreen
-                            AppRunState.Running -> StopRed
-                            AppRunState.Closing -> Color(0xFF8A6A32)
-                        },
-                    )
-                    .clickable(enabled = runState != AppRunState.Closing) {
-                        when (runState) {
-                            AppRunState.Stopped -> {
-                                if (GameSession.launch(context, game.packageName)) {
-                                    history.record(game.packageName)
-                                }
-                            }
-                            AppRunState.Running -> GameSession.close(context, game.packageName)
-                            AppRunState.Closing -> Unit
-                        }
-                    }
-                    .semantics {
-                        contentDescription = when (runState) {
-                            AppRunState.Stopped -> "Play"
-                            AppRunState.Running -> "Running"
-                            AppRunState.Closing -> "Closing"
-                        }
-                    }
-                    .padding(horizontal = 18.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = if (runState == AppRunState.Stopped) {
-                        Icons.Default.PlayArrow
-                    } else {
-                        Icons.Default.Close
-                    },
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
+                .width(240.dp)
+                .height(56.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(
                     when (runState) {
+                        AppRunState.Stopped -> PlayGreen
+                        AppRunState.Running -> StopRed
+                        AppRunState.Closing -> Color(0xFF8A6A32)
+                    },
+                )
+                .clickable(enabled = runState != AppRunState.Closing) {
+                    when (runState) {
+                        AppRunState.Stopped -> {
+                            if (GameSession.launch(context, game.packageName)) {
+                                history.record(game.packageName)
+                            }
+                        }
+                        AppRunState.Running -> GameSession.close(context, game.packageName)
+                        AppRunState.Closing -> Unit
+                    }
+                }
+                .semantics {
+                    contentDescription = when (runState) {
                         AppRunState.Stopped -> "Play"
                         AppRunState.Running -> "Running"
                         AppRunState.Closing -> "Closing"
-                    },
-                    color = Color.White,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            Spacer(Modifier.width(28.dp))
-            Stat("Last Played", lastPlayed)
-            Spacer(Modifier.width(28.dp))
-            Stat("Play Time", playTime)
-            Spacer(Modifier.width(28.dp))
-            Column {
-                Text("RATING", color = TextMuted, fontSize = 11.sp, letterSpacing = 1.sp)
-                RatingStars(details.rating)
-            }
-            Spacer(Modifier.weight(1f))
-            Glyph(
-                Icons.Default.SportsEsports,
-                onClick = { GameSession.openXtMapper(context) },
-                filled = mapperInstalled,
-                description = "Open XTMapper",
-            )
-            Spacer(Modifier.width(10.dp))
-            Glyph(
-                Icons.Default.Settings,
-                onClick = { GameSession.openAppInfo(context, game.packageName) },
-                description = "App info",
-            )
-            Spacer(Modifier.width(10.dp))
-            Glyph(Icons.Default.Folder, onClick = onCollections, description = "Collections")
-        }
-        Spacer(Modifier.height(20.dp))
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            CenteredTabs(GamePageTab.Activity, onTab)
-        }
-        Spacer(Modifier.height(24.dp))
-        Row(
-            modifier = Modifier.padding(horizontal = 32.dp),
+                    }
+                }
+                .padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier = Modifier
-                    .width(88.dp)
-                    .height(18.dp)
-                    .background(hueBrush(game.coverHue, portrait = false)),
+            Icon(
+                imageVector = if (runState == AppRunState.Stopped) {
+                    Icons.Default.PlayArrow
+                } else {
+                    Icons.Default.Close
+                },
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(32.dp),
             )
-            Spacer(Modifier.width(12.dp))
-            Text(game.title, color = TextPrimary, fontSize = 16.sp)
-            Spacer(Modifier.weight(1f))
-            Icon(Icons.Default.Person, contentDescription = null, tint = TextPrimary)
-            Spacer(Modifier.width(6.dp))
-            Text(if (details.players.isNotBlank()) details.players else game.players, color = TextPrimary, fontSize = 15.sp)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                when (runState) {
+                    AppRunState.Stopped -> "Play"
+                    AppRunState.Running -> "Running"
+                    AppRunState.Closing -> "Closing"
+                },
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
+        Spacer(Modifier.width(28.dp))
+        Stat("Last Played", lastPlayed)
+        Spacer(Modifier.width(28.dp))
+        Stat("Play Time", playTime)
+        Spacer(Modifier.width(28.dp))
+        Column {
+            Text("RATING", color = TextMuted, fontSize = 11.sp, letterSpacing = 1.sp)
+            RatingStars(details.rating)
+        }
+        Spacer(Modifier.weight(1f))
+        Glyph(
+            Icons.Default.SportsEsports,
+            onClick = { GameSession.openXtMapper(context) },
+            filled = mapperInstalled,
+            description = "Open XTMapper",
+        )
+        Spacer(Modifier.width(10.dp))
+        Glyph(
+            Icons.Default.Settings,
+            onClick = { GameSession.openAppInfo(context, game.packageName) },
+            description = "App info",
+        )
+        Spacer(Modifier.width(10.dp))
+        Glyph(Icons.Default.Folder, onClick = onCollections, description = "Collections")
     }
 }
 
 @Composable
-private fun CommunityPage(game: Game, details: TitleDetails, onTab: (GamePageTab) -> Unit) {
+private fun ActivityPane(game: Game, details: TitleDetails) {
+    Row(
+        modifier = Modifier.padding(horizontal = 32.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .width(88.dp)
+                .height(18.dp)
+                .background(hueBrush(game.coverHue, portrait = false)),
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(game.title, color = TextPrimary, fontSize = 16.sp)
+        Spacer(Modifier.weight(1f))
+        Icon(Icons.Default.Person, contentDescription = null, tint = TextPrimary)
+        Spacer(Modifier.width(6.dp))
+        Text(if (details.players.isNotBlank()) details.players else game.players, color = TextPrimary, fontSize = 15.sp)
+    }
+}
+
+@Composable
+private fun CommunityPane(game: Game, details: TitleDetails) {
     val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
     Column(
         Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp),
     ) {
-        ShoulderTabs(GamePageTab.Community, onTab)
-        Spacer(Modifier.height(28.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Average Review: ${if (details.rating > 0f) String.format("%.1f", details.rating) else "—"}", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.width(16.dp))
@@ -362,7 +372,7 @@ private fun CommunityPage(game: Game, details: TitleDetails, onTab: (GamePageTab
 }
 
 @Composable
-private fun GameInfoPage(game: Game, details: TitleDetails, onTab: (GamePageTab) -> Unit) {
+private fun GameInfoPane(game: Game, details: TitleDetails) {
     val context = LocalContext.current
     val repo = LocalArtwork.current
     var showChangeId by remember { mutableStateOf(false) }
@@ -373,10 +383,8 @@ private fun GameInfoPage(game: Game, details: TitleDetails, onTab: (GamePageTab)
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .padding(horizontal = 24.dp),
     ) {
-        ShoulderTabs(GamePageTab.GameInfo, onTab)
-        Spacer(Modifier.height(28.dp))
         Row(Modifier.fillMaxWidth()) {
             CoverArt(
                 game.title,
