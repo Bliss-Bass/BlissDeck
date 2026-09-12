@@ -33,6 +33,7 @@ import org.gamelauncher.data.LocalSettings
 import org.gamelauncher.data.StoreApp
 import org.gamelauncher.data.StoreApps
 import org.gamelauncher.ui.components.AppIconImage
+import org.gamelauncher.ui.components.cardShape
 import org.gamelauncher.ui.components.rememberArtwork
 import org.gamelauncher.ui.components.tileClick
 import org.gamelauncher.ui.components.tileFrame
@@ -109,7 +110,7 @@ private fun StoreTile(store: StoreApp, onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(56.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(cardShape())
                 .background(Background),
             contentAlignment = Alignment.Center,
         ) {

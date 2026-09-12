@@ -57,6 +57,7 @@ data class LauncherPrefs(
     val coverStyle: ArtworkCoverStyle = ArtworkCoverStyle.Tall,
     val backdrop: ArtworkBackdrop = ArtworkBackdrop.Hero,
     val textSize: TextSize = TextSize.Default,
+    val roundedCards: Boolean = false,
 )
 
 data class RecentsMetrics(
@@ -110,6 +111,7 @@ class LauncherSettings(context: Context) {
         coverStyle = enumValue(prefs.getString(KEY_COVER_STYLE, null), ArtworkCoverStyle.Tall),
         backdrop = enumValue(prefs.getString(KEY_BACKDROP, null), ArtworkBackdrop.Hero),
         textSize = enumValue(prefs.getString(KEY_TEXT_SIZE, null), TextSize.Default),
+        roundedCards = prefs.getBoolean(KEY_ROUNDED_CARDS, false),
     )
 
     private fun write(value: LauncherPrefs) {
@@ -132,6 +134,7 @@ class LauncherSettings(context: Context) {
             .putString(KEY_COVER_STYLE, value.coverStyle.name)
             .putString(KEY_BACKDROP, value.backdrop.name)
             .putString(KEY_TEXT_SIZE, value.textSize.name)
+            .putBoolean(KEY_ROUNDED_CARDS, value.roundedCards)
             .apply()
     }
 
@@ -154,6 +157,7 @@ class LauncherSettings(context: Context) {
         const val KEY_COVER_STYLE = "artwork_cover_style"
         const val KEY_BACKDROP = "artwork_backdrop"
         const val KEY_TEXT_SIZE = "text_size"
+        const val KEY_ROUNDED_CARDS = "rounded_cards"
     }
 }
 

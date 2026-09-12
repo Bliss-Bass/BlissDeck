@@ -87,6 +87,7 @@ import org.gamelauncher.ui.components.ArtworkLayer
 import org.gamelauncher.ui.components.CoverArt
 import org.gamelauncher.ui.components.ShoulderKey
 import org.gamelauncher.ui.components.SteamPill
+import org.gamelauncher.ui.components.cardShape
 import org.gamelauncher.ui.components.hueBrush
 import org.gamelauncher.ui.components.rememberArtwork
 import org.gamelauncher.ui.components.rowFocus
@@ -451,8 +452,8 @@ private fun RecentCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val shape = cardShape()
     val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
-    val shape = RoundedCornerShape(6.dp)
     val amount = if (growSelected) expand.coerceIn(0f, 1f) else 0f
     val width = lerp(metrics.thumbWidth, metrics.heroWidth, amount)
     val height = lerp(metrics.thumbHeight, metrics.heroHeight, amount)
@@ -636,7 +637,7 @@ private fun NewsCard(
     val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
     val headerUrl = artwork.imageUrl(landscape = true) ?: item.imageUrl
     val kindColor = if (item.kind.contains("BUG", ignoreCase = true)) NewsBugfix else NewsUpdate
-    val shape = RoundedCornerShape(4.dp)
+    val shape = cardShape()
     Column(
         modifier = modifier
             .tileFrame(selected, shape, onFocused)

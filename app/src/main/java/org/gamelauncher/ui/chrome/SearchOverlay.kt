@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import org.gamelauncher.data.InstalledApp
 import org.gamelauncher.data.LibrarySnapshot
 import org.gamelauncher.ui.components.ArtworkLayer
+import org.gamelauncher.ui.components.cardShape
 import org.gamelauncher.ui.components.hueBrush
 import org.gamelauncher.ui.components.rememberArtwork
 import org.gamelauncher.ui.components.tileClick
@@ -108,7 +109,7 @@ private fun SearchHit(app: InstalledApp, onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(48.dp)
-                .clip(RoundedCornerShape(4.dp))
+                .clip(cardShape())
                 .background(hueBrush(app.coverHue)),
         ) {
             ArtworkLayer(artwork, landscape = false)

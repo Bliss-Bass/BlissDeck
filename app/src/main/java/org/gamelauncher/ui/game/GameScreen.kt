@@ -80,6 +80,7 @@ import org.gamelauncher.ui.components.CoverArt
 import org.gamelauncher.ui.components.HoverCaption
 import org.gamelauncher.ui.components.ShoulderKey
 import org.gamelauncher.ui.components.SteamPill
+import org.gamelauncher.ui.components.cardShape
 import org.gamelauncher.ui.components.tileClick
 import org.gamelauncher.ui.components.tileFrame
 import org.gamelauncher.ui.components.hueBrush
@@ -224,7 +225,7 @@ private fun GamePlayBar(
             modifier = Modifier
                 .width(240.dp)
                 .height(56.dp)
-                .clip(RoundedCornerShape(2.dp))
+                .clip(cardShape())
                 .background(
                     when (runState) {
                         AppRunState.Stopped -> PlayGreen
@@ -355,7 +356,7 @@ private fun CommunityPane(game: Game, details: TitleDetails) {
                     modifier = Modifier
                         .width(320.dp)
                         .height(200.dp)
-                        .clip(RoundedCornerShape(2.dp))
+                        .clip(cardShape())
                         .background(hueBrush(game.coverHue, portrait = false)),
                 ) {
                     AsyncImage(
@@ -434,7 +435,7 @@ private fun GameInfoPane(game: Game, details: TitleDetails) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(2.dp))
+                .clip(cardShape())
                 .background(Tile)
                 .padding(horizontal = 18.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -538,10 +539,10 @@ private fun ArtChoiceRow(
                         modifier = Modifier
                             .width(w)
                             .height(h)
-                            .tileFrame(picked, RoundedCornerShape(4.dp), width = 2.dp)
-                            .background(Tile, RoundedCornerShape(4.dp))
+                            .tileFrame(picked, cardShape(), width = 2.dp)
+                            .background(Tile, cardShape())
                             .tileClick { onSelect(option.url) }
-                            .clip(RoundedCornerShape(4.dp)),
+                            .clip(cardShape()),
                         contentAlignment = Alignment.Center,
                     ) {
                         when {
@@ -571,7 +572,7 @@ private fun ChangeIdSheet(
     Column(
         modifier = Modifier
             .width(420.dp)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(cardShape())
             .background(Tile)
             .padding(24.dp),
     ) {
@@ -658,7 +659,8 @@ private fun CollectionPicker(packageName: String, onDismiss: () -> Unit) {
         Column(
             modifier = Modifier
                 .width(420.dp)
-                .background(Tile, RoundedCornerShape(6.dp))
+                .clip(cardShape())
+                .background(Tile)
                 .padding(24.dp),
         ) {
             Text("Collections", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
@@ -713,7 +715,7 @@ private fun Glyph(
         Box(
             modifier = Modifier
                 .size(52.dp)
-                .clip(RoundedCornerShape(4.dp))
+                .clip(cardShape())
                 .background(Tile)
                 .clickable(onClick = onClick)
                 .then(if (description != null) Modifier.semantics { contentDescription = description } else Modifier),
@@ -736,7 +738,7 @@ private fun MetaLine(label: String, value: String) {
 private fun InfoAction(label: String, onClick: () -> Unit = {}) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(2.dp))
+            .clip(cardShape())
             .background(Color(0xFF3A424A))
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),

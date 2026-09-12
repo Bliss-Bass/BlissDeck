@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Home
@@ -37,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import org.gamelauncher.R
 import org.gamelauncher.data.rememberIsDefaultHome
 import org.gamelauncher.data.LocalTheme
+import org.gamelauncher.ui.components.cardShape
 import org.gamelauncher.ui.theme.Menu
 import org.gamelauncher.ui.theme.TextMuted
 import org.gamelauncher.ui.theme.TextPrimary
@@ -59,7 +59,7 @@ fun UserMenu(
     Column(
         modifier = Modifier
             .width(300.dp)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(cardShape())
             .frosted(menuColor)
             .padding(vertical = 10.dp),
     ) {

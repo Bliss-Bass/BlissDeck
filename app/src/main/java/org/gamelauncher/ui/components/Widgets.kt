@@ -84,6 +84,18 @@ import org.gamelauncher.ui.theme.Tile
 import org.gamelauncher.ui.theme.TileBorder
 import kotlin.math.absoluteValue
 
+private val RoundedCardRadius = 16.dp
+
+@Composable
+fun cardRadius(): Dp {
+    val rounded = LocalSettings.current.state.collectAsState().value.roundedCards
+    val themeRadius = LocalTheme.current.borders.radius
+    return if (rounded) RoundedCardRadius else themeRadius
+}
+
+@Composable
+fun cardShape(): RoundedCornerShape = RoundedCornerShape(cardRadius())
+
 fun hueBrush(hue: Float, portrait: Boolean = true): Brush {
     val a = Color.hsl((hue).mod(360f), 0.62f, 0.42f)
     val b = Color.hsl((hue + 40f).mod(360f), 0.55f, 0.22f)
@@ -131,7 +143,7 @@ fun CoverArt(
     } else {
         Artwork("", null, null, null, null, null)
     }
-    val shape = RoundedCornerShape(2.dp)
+    val shape = cardShape()
     Box(
         modifier = modifier
             .tileFrame(selected, shape, onFocused)
@@ -247,7 +259,7 @@ fun AppIconTile(
     onFocused: () -> Unit = {},
     onClick: () -> Unit = {},
 ) {
-    val shape = RoundedCornerShape(4.dp)
+    val shape = cardShape()
     Column(
         modifier = modifier
             .tileFrame(selected, shape, onFocused)
@@ -522,7 +534,7 @@ fun Modifier.tileFrame(
     val theme = LocalTheme.current
     val stroke = width ?: theme.borders.width
     val strokeColor = color ?: theme.borders.color
-    val frameShape = RoundedCornerShape(theme.borders.radius)
+    val frameShape = cardShape()
     var focused by remember { mutableStateOf(false) }
     onFocusChanged {
         focused = it.isFocused

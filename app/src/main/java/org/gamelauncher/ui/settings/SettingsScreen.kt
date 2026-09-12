@@ -70,6 +70,7 @@ import org.gamelauncher.data.RecentsSize
 import org.gamelauncher.data.StoreApps
 import org.gamelauncher.data.TextSize
 import org.gamelauncher.ui.components.SteamPill
+import org.gamelauncher.ui.components.cardShape
 import org.gamelauncher.ui.components.tileClick
 import org.gamelauncher.ui.components.tileFrame
 import org.gamelauncher.ui.theme.Background
@@ -247,6 +248,16 @@ fun SettingsScreen() {
                 color = TextMuted,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(top = 8.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+            SettingToggle("Rounded cards", prefs.roundedCards) {
+                settings.update { p -> p.copy(roundedCards = !p.roundedCards) }
+            }
+            Text(
+                "Rounds Last Played, library covers, What’s New, Settings groups, and other tiles.",
+                color = TextMuted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
 
@@ -690,7 +701,8 @@ private fun SettingsCard(title: String, content: @Composable () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 12.dp)
-            .background(Tile, RoundedCornerShape(6.dp))
+            .clip(cardShape())
+            .background(Tile)
             .padding(18.dp),
     ) {
         Text(title, color = TextPrimary, fontSize = 18.sp)

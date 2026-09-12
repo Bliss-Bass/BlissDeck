@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -38,6 +39,7 @@ import org.gamelauncher.data.LibrarySnapshot
 import org.gamelauncher.data.LocalCollections
 import org.gamelauncher.data.findEntry
 import org.gamelauncher.ui.components.CoverArt
+import org.gamelauncher.ui.components.cardShape
 import org.gamelauncher.ui.components.tileClick
 import org.gamelauncher.ui.components.tileFrame
 import org.gamelauncher.ui.theme.Background
@@ -207,7 +209,8 @@ private fun NameSheet(
         Column(
             modifier = Modifier
                 .width(420.dp)
-                .background(Tile, RoundedCornerShape(6.dp))
+                .clip(cardShape())
+                .background(Tile)
                 .padding(24.dp),
         ) {
             Text(title, color = TextPrimary, fontSize = 20.sp)
@@ -220,7 +223,7 @@ private fun NameSheet(
                 cursorBrush = SolidColor(TextPrimary),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Background, RoundedCornerShape(4.dp))
+                    .background(Background, cardShape())
                     .padding(12.dp),
             )
             Spacer(Modifier.height(16.dp))
@@ -246,7 +249,8 @@ private fun AddGamesSheet(
             modifier = Modifier
                 .width(480.dp)
                 .height(420.dp)
-                .background(Tile, RoundedCornerShape(6.dp))
+                .clip(cardShape())
+                .background(Tile)
                 .padding(20.dp),
         ) {
             Text("Add games — ${collection.name}", color = TextPrimary, fontSize = 20.sp)
