@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
@@ -63,10 +64,14 @@ fun LauncherApp(onClose: () -> Unit) {
         var searchQuery by remember { mutableStateOf("") }
         val current = stack.last()
 
-        fun go(screen: Screen, clear: Boolean = false) {
-            stack = if (clear) listOf(screen) else stack + screen
+        fun go(screen: Screen, root: Boolean = false) {
             menuOpen = false
             userMenuOpen = false
+            stack = when {
+                root -> listOf(screen)
+                stack.lastOrNull() == screen -> stack
+                else -> stack + screen
+            }
         }
 
         fun back() {
@@ -78,10 +83,11 @@ fun LauncherApp(onClose: () -> Unit) {
                     searchQuery = ""
                 }
                 stack.size > 1 -> stack = stack.dropLast(1)
+                stack.lastOrNull() !is Screen.Home -> stack = listOf(Screen.Home)
             }
         }
 
-        BackHandler(enabled = menuOpen || userMenuOpen || searchOpen || stack.size > 1) { back() }
+        BackHandler { back() }
 
         val hints = when {
             menuOpen -> CommandHints()
@@ -99,77 +105,86 @@ fun LauncherApp(onClose: () -> Unit) {
                 .fillMaxSize()
                 .background(Background),
         ) {
-            TopStatusBar(
-                searchOpen = searchOpen,
-                searchQuery = searchQuery,
-                onSearchQuery = { searchQuery = it },
-                onToggleSearch = {
-                    searchOpen = !searchOpen
-                    if (!searchOpen) searchQuery = ""
-                    userMenuOpen = false
-                },
-                onUserMenu = {
-                    userMenuOpen = !userMenuOpen
-                    searchOpen = false
-                    searchQuery = ""
-                    menuOpen = false
-                },
-                modifier = Modifier.windowInsetsPadding(rememberTopChromeInsets(freeform)),
-            )
             Box(Modifier.weight(1f)) {
-                when (val screen = current) {
-                    Screen.Home -> HomeScreen(
-                        snapshot,
-                        news = news,
-                        newsLoading = newsLoading,
-                        onOpenGame = { go(Screen.Game(it)) },
-                    )
-                    Screen.Library -> LibraryScreen(snapshot, onOpenGame = { go(Screen.Game(it)) })
-                    Screen.Store -> StoreScreen()
-                    Screen.Settings -> SettingsScreen()
-                    is Screen.Game -> {
-                        val game = snapshot.findEntry(screen.id)
-                        if (game != null) {
-                            GameScreen(game)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = 52.dp),
+                ) {
+                    when (val screen = current) {
+                        Screen.Home -> HomeScreen(
+                            snapshot,
+                            news = news,
+                            newsLoading = newsLoading,
+                            onOpenGame = { go(Screen.Game(it)) },
+                        )
+                        Screen.Library -> LibraryScreen(snapshot, onOpenGame = { go(Screen.Game(it)) })
+                        Screen.Store -> StoreScreen()
+                        Screen.Settings -> SettingsScreen()
+                        is Screen.Game -> {
+                            val game = snapshot.findEntry(screen.id)
+                            if (game != null) {
+                                GameScreen(game)
+                            }
                         }
                     }
-                }
-                if (searchOpen) {
-                    SearchOverlay(snapshot, searchQuery) { id ->
-                        searchOpen = false
-                        searchQuery = ""
-                        go(Screen.Game(id))
+                    if (searchOpen) {
+                        SearchOverlay(snapshot, searchQuery) { id ->
+                            searchOpen = false
+                            searchQuery = ""
+                            go(Screen.Game(id))
+                        }
                     }
-                }
-                if (userMenuOpen) {
-                    DimScrim { userMenuOpen = false }
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(end = 12.dp, top = 8.dp),
-                    ) {
-                        UserMenu(
-                            onLauncherSettings = { go(Screen.Settings, clear = true) },
-                            onCloseLauncher = onClose,
-                            onDismiss = { userMenuOpen = false },
-                        )
+                    if (userMenuOpen) {
+                        DimScrim { userMenuOpen = false }
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(end = 12.dp, top = 8.dp),
+                        ) {
+                            UserMenu(
+                                onLauncherSettings = { go(Screen.Settings) },
+                                onCloseLauncher = onClose,
+                                onDismiss = { userMenuOpen = false },
+                            )
+                        }
                     }
-                }
-                if (menuOpen) {
-                    DimScrim { menuOpen = false }
-                    Box(Modifier.align(Alignment.CenterStart)) {
-                        SideMenu(current) { item ->
-                            when (item) {
-                                MenuItem.Home -> go(Screen.Home, clear = true)
-                                MenuItem.Library -> go(Screen.Library, clear = true)
-                                MenuItem.Store -> go(Screen.Store, clear = true)
-                                MenuItem.Settings -> go(Screen.Settings, clear = true)
-                                MenuItem.Close -> onClose()
-                                MenuItem.Friends, MenuItem.Media, MenuItem.Downloads -> Unit
+                    if (menuOpen) {
+                        DimScrim { menuOpen = false }
+                        Box(Modifier.align(Alignment.CenterStart)) {
+                            SideMenu(current) { item ->
+                                when (item) {
+                                    MenuItem.Home -> go(Screen.Home, root = true)
+                                    MenuItem.Library -> go(Screen.Library)
+                                    MenuItem.Store -> go(Screen.Store)
+                                    MenuItem.Settings -> go(Screen.Settings)
+                                    MenuItem.Close -> onClose()
+                                    MenuItem.Friends, MenuItem.Media, MenuItem.Downloads -> Unit
+                                }
                             }
                         }
                     }
                 }
+                TopStatusBar(
+                    searchOpen = searchOpen,
+                    searchQuery = searchQuery,
+                    onSearchQuery = { searchQuery = it },
+                    onToggleSearch = {
+                        searchOpen = !searchOpen
+                        if (!searchOpen) searchQuery = ""
+                        userMenuOpen = false
+                    },
+                    onUserMenu = {
+                        userMenuOpen = !userMenuOpen
+                        searchOpen = false
+                        searchQuery = ""
+                        menuOpen = false
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .windowInsetsPadding(rememberTopChromeInsets(freeform)),
+                )
             }
             CommandBar(
                 hints,

@@ -55,6 +55,8 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import org.gamelauncher.ui.components.DiamondMark
 import org.gamelauncher.ui.components.FaceButton
+import org.gamelauncher.ui.components.tileClick
+import org.gamelauncher.ui.components.tileFrame
 import org.gamelauncher.ui.navigation.MenuItem
 import org.gamelauncher.ui.navigation.Screen
 import org.gamelauncher.ui.theme.Footer
@@ -171,27 +173,39 @@ fun TopStatusBar(
             color = Color.White,
             fontSize = 18.sp,
             fontWeight = FontWeight.Medium,
-            modifier = Modifier.clickable { expandNotificationShade(context) },
+            modifier = Modifier
+                .tileFrame(false, RoundedCornerShape(6.dp), width = 3.dp)
+                .tileClick { expandNotificationShade(context) }
+                .padding(horizontal = 8.dp, vertical = 4.dp),
         )
         Spacer(Modifier.width(12.dp))
-        DiamondMark(
-            32.dp,
-            modifier = Modifier.clickable(onClick = onUserMenu),
-        )
+        Box(
+            modifier = Modifier
+                .tileFrame(false, RoundedCornerShape(8.dp), width = 3.dp)
+                .tileClick(onUserMenu)
+                .padding(4.dp),
+        ) {
+            DiamondMark(32.dp)
+        }
     }
 }
 
 @Composable
 private fun TopBarIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
-    Icon(
-        icon,
-        contentDescription = label,
-        tint = Color.White,
+    Box(
         modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(6.dp)
-            .size(22.dp),
-    )
+            .tileFrame(false, RoundedCornerShape(8.dp), width = 3.dp)
+            .tileClick(onClick)
+            .padding(6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = Color.White,
+            modifier = Modifier.size(22.dp),
+        )
+    }
 }
 
 private fun batteryIcon(status: DeviceStatus) = when {
@@ -218,7 +232,10 @@ fun CommandBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
-            modifier = Modifier.clickable(onClick = onMenu),
+            modifier = Modifier
+                .tileFrame(false, RoundedCornerShape(6.dp), width = 3.dp)
+                .tileClick(onMenu)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             DiamondMark(22.dp)
@@ -232,7 +249,12 @@ fun CommandBar(
         }
         FaceButton("A", hints.select)
         Spacer(Modifier.width(22.dp))
-        Box(Modifier.clickable(onClick = onBack)) {
+        Box(
+            modifier = Modifier
+                .tileFrame(false, RoundedCornerShape(6.dp), width = 3.dp)
+                .tileClick(onBack)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+        ) {
             FaceButton("B", hints.back)
         }
     }
@@ -289,6 +311,7 @@ private fun MenuRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .tileFrame(selected, RoundedCornerShape(0.dp), width = 2.dp)
             .background(bg)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 28.dp, vertical = 16.dp),

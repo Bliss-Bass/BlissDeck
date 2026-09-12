@@ -30,6 +30,8 @@ import org.gamelauncher.data.LibrarySnapshot
 import org.gamelauncher.ui.components.ArtworkLayer
 import org.gamelauncher.ui.components.hueBrush
 import org.gamelauncher.ui.components.rememberArtwork
+import org.gamelauncher.ui.components.tileClick
+import org.gamelauncher.ui.components.tileFrame
 import org.gamelauncher.ui.theme.Background
 import org.gamelauncher.ui.theme.TextMuted
 import org.gamelauncher.ui.theme.TextPrimary
@@ -96,9 +98,9 @@ private fun SearchHit(app: InstalledApp, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
+            .tileFrame(false, RoundedCornerShape(6.dp))
             .background(Tile)
-            .clickable(onClick = onClick)
+            .tileClick(onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

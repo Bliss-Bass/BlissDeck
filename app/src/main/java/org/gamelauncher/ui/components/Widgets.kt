@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,11 +22,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -90,6 +99,7 @@ fun CoverArt(
     isGame: Boolean = true,
     landscape: Boolean = false,
     preferIcon: Boolean = false,
+    onFocused: () -> Unit = {},
 ) {
     val artwork = if (packageName.isNotBlank()) {
         rememberArtwork(packageName, title, isGame)
@@ -99,8 +109,7 @@ fun CoverArt(
     val shape = RoundedCornerShape(2.dp)
     Box(
         modifier = modifier
-            .clip(shape)
-            .then(if (selected) Modifier.border(3.dp, TileBorder, shape) else Modifier)
+            .tileFrame(selected, shape, onFocused)
             .background(hueBrush(hue, portrait = !landscape)),
     ) {
         ArtworkLayer(
@@ -191,15 +200,15 @@ fun AppIconTile(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
     packageName: String = "",
+    onFocused: () -> Unit = {},
     onClick: () -> Unit = {},
 ) {
     val shape = RoundedCornerShape(4.dp)
     Column(
         modifier = modifier
-            .clip(shape)
-            .then(if (selected) Modifier.border(2.dp, TileBorder, shape) else Modifier)
+            .tileFrame(selected, shape, onFocused)
             .background(Tile)
-            .clickable(onClick = onClick)
+            .tileClick(onClick)
             .padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -248,9 +257,14 @@ fun SteamPill(
     val shape = RoundedCornerShape(50)
     Row(
         modifier = modifier
-            .clip(shape)
+            .tileFrame(
+                selected = false,
+                shape = shape,
+                width = 2.dp,
+                color = if (selected) Color(0xFF1B1F24) else TileBorder,
+            )
             .background(if (selected) Pill else Color.Transparent)
-            .clickable(onClick = onClick)
+            .tileClick(onClick)
             .padding(horizontal = 18.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -274,11 +288,12 @@ fun SteamPill(
 
 @Composable
 fun ShoulderKey(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(4.dp)
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
+            .tileFrame(false, shape, width = 2.dp, color = Color.Black)
             .background(Color.White)
-            .clickable(onClick = onClick)
+            .tileClick(onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -335,3 +350,36 @@ fun DiamondMark(size: Dp = 28.dp, modifier: Modifier = Modifier) {
 }
 
 fun String.stableHue(): Float = (hashCode().absoluteValue % 360).toFloat()
+
+fun Modifier.tileClick(onClick: () -> Unit): Modifier = composed {
+    val source = remember { MutableInteractionSource() }
+    clickable(
+        interactionSource = source,
+        indication = null,
+        onClick = onClick,
+    )
+}
+
+fun Modifier.tileFrame(
+    selected: Boolean,
+    shape: RoundedCornerShape,
+    onFocused: () -> Unit = {},
+    width: Dp = 4.dp,
+    color: Color = TileBorder,
+): Modifier = composed {
+    var focused by remember { mutableStateOf(false) }
+    onFocusChanged {
+        focused = it.isFocused
+        if (it.isFocused) onFocused()
+    }
+        .clip(shape)
+        .then(if (selected || focused) Modifier.border(width, color, shape) else Modifier)
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+fun Modifier.rowFocus(requesters: List<FocusRequester>, index: Int): Modifier {
+    return focusRequester(requesters[index]).focusProperties {
+        left = requesters.getOrNull(index - 1) ?: FocusRequester.Cancel
+        right = requesters.getOrNull(index + 1) ?: FocusRequester.Cancel
+    }
+}

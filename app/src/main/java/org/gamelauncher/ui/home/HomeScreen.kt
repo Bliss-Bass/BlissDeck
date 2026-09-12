@@ -1,9 +1,6 @@
 package org.gamelauncher.ui.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +12,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -54,6 +54,9 @@ import org.gamelauncher.ui.components.ShoulderKey
 import org.gamelauncher.ui.components.SteamPill
 import org.gamelauncher.ui.components.hueBrush
 import org.gamelauncher.ui.components.rememberArtwork
+import org.gamelauncher.ui.components.rowFocus
+import org.gamelauncher.ui.components.tileClick
+import org.gamelauncher.ui.components.tileFrame
 import org.gamelauncher.ui.theme.Background
 import org.gamelauncher.ui.theme.NewsBugfix
 import org.gamelauncher.ui.theme.NewsUpdate
@@ -61,7 +64,6 @@ import org.gamelauncher.ui.theme.PlayGreen
 import org.gamelauncher.ui.theme.TextMuted
 import org.gamelauncher.ui.theme.TextPrimary
 import org.gamelauncher.ui.theme.Tile
-import org.gamelauncher.ui.theme.TileBorder
 
 @Composable
 fun HomeScreen(
@@ -92,39 +94,22 @@ fun HomeScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(start = 28.dp, end = 28.dp, top = 18.dp, bottom = 12.dp),
         ) {
-        Text("Recent games", color = TextPrimary, fontSize = 18.sp)
-        Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            recents.forEach { game ->
-                val wide = game.id == selectedId
-                CoverArt(
-                    title = game.title,
-                    hue = game.coverHue,
-                    selected = wide,
-                    showTitle = true,
-                    packageName = game.packageName,
-                    isGame = game.inLibrary,
-                    landscape = true,
-                    preferIcon = true,
-                    modifier = Modifier
-                        .width(if (wide) 340.dp else 170.dp)
-                        .height(168.dp)
-                        .clickable {
-                            if (selectedId == game.id) onOpenGame(game.id) else selectedId = game.id
-                        },
-                )
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-        Text(selected.title, color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+        Text("Recent games", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(14.dp))
+        RecentsRow(recents, selectedId, onSelect = { selectedId = it }, onOpenGame = onOpenGame)
+        Spacer(Modifier.height(18.dp))
+        Text(selected.title, color = TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = PlayGreen)
+            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = PlayGreen, modifier = Modifier.size(28.dp))
             Text(
                 "PLAY NOW!",
                 color = PlayGreen,
                 fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                modifier = Modifier.clickable { onOpenGame(selected.id) },
+                fontSize = 16.sp,
+                modifier = Modifier
+                    .tileFrame(false, RoundedCornerShape(4.dp), width = 2.dp)
+                    .tileClick { onOpenGame(selected.id) }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
             )
         }
         Spacer(Modifier.height(28.dp))
@@ -141,6 +126,82 @@ fun HomeScreen(
             HomeFeedTab.Favorites -> EmptyCenter("No favorites yet")
             HomeFeedTab.Recommended -> RecommendedRow(snapshot.installed, onOpenGame)
         }
+        }
+    }
+}
+
+@Composable
+private fun RecentsRow(
+    recents: List<Game>,
+    selectedId: String,
+    onSelect: (String) -> Unit,
+    onOpenGame: (String) -> Unit,
+) {
+    val requesters = remember(recents.map { it.id }) { List(recents.size) { FocusRequester() } }
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        itemsIndexed(recents, key = { _, game -> game.id }) { index, game ->
+            RecentCard(
+                game = game,
+                selected = game.id == selectedId,
+                onFocused = { onSelect(game.id) },
+                modifier = Modifier.rowFocus(requesters, index),
+            ) {
+                if (selectedId == game.id) onOpenGame(game.id) else onSelect(game.id)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentCard(
+    game: Game,
+    selected: Boolean,
+    onFocused: () -> Unit,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
+    val shape = RoundedCornerShape(4.dp)
+    Column(
+        modifier = modifier
+            .width(680.dp)
+            .tileFrame(selected, shape, onFocused)
+            .background(Tile)
+            .tileClick(onClick),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(336.dp)
+                .background(hueBrush(game.coverHue, portrait = false)),
+            contentAlignment = Alignment.Center,
+        ) {
+            ArtworkLayer(
+                artwork,
+                landscape = true,
+                preferIcon = true,
+                modifier = Modifier.padding(56.dp),
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)),
+                        ),
+                    ),
+            )
+            Text(
+                game.title,
+                color = TextPrimary,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(18.dp),
+            )
         }
     }
 }
@@ -175,13 +236,18 @@ private fun WhatsNewRow(
     snapshot: LibrarySnapshot,
     onOpenGame: (String) -> Unit,
 ) {
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        news.forEachIndexed { index, item ->
-            val game = snapshot.findEntry(item.gameId) ?: return@forEachIndexed
-            NewsCard(item, game, selected = index == 0) { onOpenGame(item.gameId) }
+    var selectedNews by remember { mutableStateOf<String?>(null) }
+    val cards = news.mapNotNull { item ->
+        snapshot.findEntry(item.gameId)?.let { item to it }
+    }
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        itemsIndexed(cards, key = { _, pair -> pair.first.id }) { _, (item, game) ->
+            NewsCard(
+                item,
+                game,
+                selected = item.id == selectedNews,
+                onFocused = { selectedNews = item.id },
+            ) { onOpenGame(item.gameId) }
         }
     }
 }
@@ -191,6 +257,8 @@ private fun NewsCard(
     item: NewsItem,
     game: Game,
     selected: Boolean,
+    onFocused: () -> Unit,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
@@ -198,12 +266,11 @@ private fun NewsCard(
     val kindColor = if (item.kind.contains("BUG", ignoreCase = true)) NewsBugfix else NewsUpdate
     val shape = RoundedCornerShape(4.dp)
     Column(
-        modifier = Modifier
+        modifier = modifier
             .width(360.dp)
-            .clip(shape)
-            .then(if (selected) Modifier.border(2.dp, TileBorder, shape) else Modifier)
+            .tileFrame(selected, shape, onFocused)
             .background(Tile)
-            .clickable(onClick = onClick),
+            .tileClick(onClick),
     ) {
         Box(
             modifier = Modifier
@@ -287,11 +354,8 @@ private fun RecommendedRow(apps: List<InstalledApp>, onOpenGame: (String) -> Uni
         Text("Play next from your library", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
         Text("Players like you love these unplayed games in your library", color = TextMuted, fontSize = 14.sp)
         Spacer(Modifier.height(16.dp))
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            apps.forEach { app ->
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            itemsIndexed(apps, key = { _, app -> app.id }) { _, app ->
                 if (app.isGame) {
                     CoverArt(
                         title = app.title,
@@ -303,7 +367,7 @@ private fun RecommendedRow(apps: List<InstalledApp>, onOpenGame: (String) -> Uni
                         modifier = Modifier
                             .width(150.dp)
                             .height(210.dp)
-                            .clickable { onOpenGame(app.id) },
+                            .tileClick { onOpenGame(app.id) },
                     )
                 } else {
                     AppIconTile(

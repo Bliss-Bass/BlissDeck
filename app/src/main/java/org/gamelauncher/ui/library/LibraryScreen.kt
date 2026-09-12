@@ -1,7 +1,7 @@
 package org.gamelauncher.ui.library
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,15 +15,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,6 +36,7 @@ import org.gamelauncher.ui.components.AppIconTile
 import org.gamelauncher.ui.components.CoverArt
 import org.gamelauncher.ui.components.ShoulderKey
 import org.gamelauncher.ui.components.SteamPill
+import org.gamelauncher.ui.components.tileClick
 import org.gamelauncher.ui.theme.Background
 import org.gamelauncher.ui.theme.TextMuted
 
@@ -42,6 +46,11 @@ fun LibraryScreen(
     onOpenGame: (String) -> Unit,
 ) {
     var tab by remember { mutableStateOf(LibraryTab.AllGames) }
+    val firstFocus = remember(tab) { FocusRequester() }
+    LaunchedEffect(tab) {
+        kotlinx.coroutines.delay(80)
+        runCatching { firstFocus.requestFocus() }
+    }
 
     Column(
         modifier = Modifier
@@ -82,8 +91,9 @@ fun LibraryScreen(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(bottom = 12.dp),
+                modifier = Modifier.focusGroup(),
             ) {
-                items(snapshot.libraryGames, key = { it.id }) { game ->
+                itemsIndexed(snapshot.libraryGames, key = { _, game -> game.id }) { index, game ->
                     CoverArt(
                         title = game.title,
                         hue = game.coverHue,
@@ -92,7 +102,8 @@ fun LibraryScreen(
                         isGame = true,
                         modifier = Modifier
                             .height(230.dp)
-                            .clickable { onOpenGame(game.id) },
+                            .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                            .tileClick { onOpenGame(game.id) },
                     )
                 }
             }
@@ -101,8 +112,9 @@ fun LibraryScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(bottom = 12.dp),
+                modifier = Modifier.focusGroup(),
             ) {
-                items(snapshot.installed, key = { it.id }) { app ->
+                itemsIndexed(snapshot.installed, key = { _, app -> app.id }) { index, app ->
                     if (app.isGame) {
                         CoverArt(
                             title = app.title,
@@ -112,14 +124,17 @@ fun LibraryScreen(
                             isGame = true,
                             modifier = Modifier
                                 .height(210.dp)
-                                .clickable { onOpenGame(app.id) },
+                                .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                                .tileClick { onOpenGame(app.id) },
                         )
                     } else {
                         AppIconTile(
                             title = app.title,
                             hue = app.coverHue,
                             packageName = app.packageName,
-                            modifier = Modifier.height(210.dp),
+                            modifier = Modifier
+                                .height(210.dp)
+                                .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier),
                             onClick = { onOpenGame(app.id) },
                         )
                     }
