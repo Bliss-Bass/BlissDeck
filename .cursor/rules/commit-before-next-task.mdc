@@ -1,0 +1,15 @@
+---
+description: Commit finished work before starting the next task
+alwaysApply: true
+---
+
+# Commit before the next task
+
+When a unit of work is done, create a git commit before starting a different task in the same conversation. Do this even if the user did not say "commit" — waiting until the end of a long session is how work gets forgotten.
+
+A unit of work is a feature, fix, refactor, or rule that leaves the repo in a coherent state. If the next request is a new concern, commit first.
+
+- Split unrelated changes into separate commits when the files allow it.
+- Follow this repo's commit style (imperative, one or two sentences, why not what) and the user's git safety rules: no force push, no `git add -i`/`-p`, no amend unless they asked, HEREDOC messages.
+- Skip only when the user said not to commit, the tree is empty, they asked to keep iterating on the same uncommitted change, or the files look like secrets.
+- Do not commit `.env`, credentials, or generated junk.
