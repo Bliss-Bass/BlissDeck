@@ -6,23 +6,58 @@ import android.content.ComponentName
 import android.content.Context
 import android.graphics.Path
 import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
-import android.util.Log
+import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 
 class CloseGameService : AccessibilityService() {
+    private val refresh = Handler(Looper.getMainLooper())
+    private val publishWindows = Runnable { AppPresence.publishOpen(scanWindows()) }
+
     override fun onServiceConnected() {
         instance = this
+        AppPresence.setConnected(true)
+        refresh.removeCallbacks(publishWindows)
+        refresh.post(publishWindows)
     }
 
-    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) = Unit
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        refresh.removeCallbacks(publishWindows)
+        refresh.postDelayed(publishWindows, 60)
+    }
 
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {
+        refresh.removeCallbacks(publishWindows)
         if (instance === this) instance = null
+        AppPresence.setConnected(false)
         super.onDestroy()
+    }
+
+    private fun scanWindows(): List<RunningApp> {
+        val self = packageName
+        val pm = packageManager
+        val seen = LinkedHashMap<String, RunningApp>()
+        windows.orEmpty().forEach { window ->
+            if (window.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD) return@forEach
+            if (window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) return@forEach
+            val root = window.root
+            val pkg = root?.packageName?.toString()
+            if (root != null && android.os.Build.VERSION.SDK_INT < 33) {
+                @Suppress("DEPRECATION")
+                runCatching { root.recycle() }
+            }
+            if (pkg.isNullOrBlank() || GameSession.hideFromSwitcher(pkg, self)) return@forEach
+            val title = window.title?.toString()?.takeIf { it.isNotBlank() && '/' !in it }
+                ?: runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }
+                    .getOrDefault(pkg)
+            seen.putIfAbsent(pkg, RunningApp(pkg, title, taskId = null))
+        }
+        return seen.values.toList()
     }
 
     fun closePackage(packageName: String): Boolean {

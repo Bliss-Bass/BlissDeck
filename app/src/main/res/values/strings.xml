@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">Game Launcher</string>
-    <string name="close_game_service_description">Lets Game Launcher close a running game from the Close button, including freeform windows.</string>
+    <string name="close_game_service_description">Lets Game Launcher see which games are open, close them from the game page, and switch to them from the sidebar. This includes freeform windows.</string>
 </resources>
