@@ -67,6 +67,7 @@ import org.gamelauncher.data.rememberIsDefaultHome
 import org.gamelauncher.ui.components.AppIconImage
 import org.gamelauncher.ui.components.DiamondMark
 import org.gamelauncher.ui.components.FaceButton
+import org.gamelauncher.ui.components.HoverCaption
 import org.gamelauncher.ui.components.columnFocus
 import org.gamelauncher.ui.components.rememberArtwork
 import org.gamelauncher.ui.components.tileClick
@@ -165,14 +166,16 @@ fun TopStatusBar(
                         inner()
                     },
                 )
-                Icon(
-                    Icons.Default.Close,
-                    contentDescription = "Close search",
-                    tint = Color(0xFF4A4A4A),
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clickable(onClick = onToggleSearch),
-                )
+                HoverCaption("Close search") {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Close search",
+                        tint = Color(0xFF4A4A4A),
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clickable(onClick = onToggleSearch),
+                    )
+                }
             }
             Spacer(Modifier.width(16.dp))
         } else {
@@ -182,14 +185,18 @@ fun TopStatusBar(
         }
         TopBarIcon(
             icon = if (status.wifiConnected) Icons.Default.Wifi else Icons.Default.WifiOff,
-            label = if (status.wifiConnected) "Wi-Fi connected" else "Wi-Fi",
+            label = if (status.wifiConnected) "Wi-Fi connected" else "Wi-Fi off",
             tint = iconTint,
             onClick = { expandNotificationShade(context) },
         )
         Spacer(Modifier.width(4.dp))
         TopBarIcon(
             icon = batteryIcon(status),
-            label = "Battery ${status.batteryPercent}%",
+            label = if (status.charging) {
+                "Battery ${status.batteryPercent}%, charging"
+            } else {
+                "Battery ${status.batteryPercent}%"
+            },
             tint = iconTint,
             onClick = { expandNotificationShade(context) },
         )
@@ -205,13 +212,15 @@ fun TopStatusBar(
                 .padding(horizontal = 8.dp, vertical = 4.dp),
         )
         Spacer(Modifier.width(12.dp))
-        Box(
-            modifier = Modifier
-                .tileFrame(false, RoundedCornerShape(8.dp), width = 3.dp)
-                .tileClick(onUserMenu)
-                .padding(4.dp),
-        ) {
-            DiamondMark(32.dp)
+        HoverCaption("Account") {
+            Box(
+                modifier = Modifier
+                    .tileFrame(false, RoundedCornerShape(8.dp), width = 3.dp)
+                    .tileClick(onUserMenu)
+                    .padding(4.dp),
+            ) {
+                DiamondMark(32.dp)
+            }
         }
     }
     }
@@ -219,19 +228,21 @@ fun TopStatusBar(
 
 @Composable
 private fun TopBarIcon(icon: ImageVector, label: String, tint: Color, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .tileFrame(false, RoundedCornerShape(8.dp), width = 3.dp)
-            .tileClick(onClick)
-            .padding(6.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            icon,
-            contentDescription = label,
-            tint = tint,
-            modifier = Modifier.size(22.dp),
-        )
+    HoverCaption(label) {
+        Box(
+            modifier = Modifier
+                .tileFrame(false, RoundedCornerShape(8.dp), width = 3.dp)
+                .tileClick(onClick)
+                .padding(6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                icon,
+                contentDescription = label,
+                tint = tint,
+                modifier = Modifier.size(22.dp),
+            )
+        }
     }
 }
 

@@ -6,7 +6,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,13 +44,27 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
+import kotlinx.coroutines.delay
+import org.gamelauncher.data.LocalSettings
+import org.gamelauncher.ui.theme.Footer
 import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
 import org.gamelauncher.data.Artwork
@@ -308,16 +325,23 @@ fun SteamPill(
 
 @Composable
 fun ShoulderKey(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(4.dp)
-    Box(
-        modifier = modifier
-            .tileFrame(false, shape, width = 2.dp, color = Color.Black)
-            .background(Color.White)
-            .tileClick(onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+    val caption = when (label) {
+        "L1" -> "Previous"
+        "R1" -> "Next"
+        else -> null
+    }
+    HoverCaption(caption.orEmpty(), modifier) {
+        val shape = RoundedCornerShape(4.dp)
+        Box(
+            modifier = Modifier
+                .tileFrame(false, shape, width = 2.dp, color = Color.Black)
+                .background(Color.White)
+                .tileClick(onClick)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(label, color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        }
     }
 }
 
@@ -370,6 +394,100 @@ fun DiamondMark(size: Dp = 28.dp, modifier: Modifier = Modifier) {
 }
 
 fun String.stableHue(): Float = (hashCode().absoluteValue % 360).toFloat()
+
+@Composable
+fun HoverCaption(
+    caption: String,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val enabled = LocalSettings.current.state.collectAsState().value.hoverCaptions
+    if (!enabled || caption.isBlank()) {
+        Box(modifier) { content() }
+        return
+    }
+    val hover = remember { MutableInteractionSource() }
+    val hoverableHovered by hover.collectIsHoveredAsState()
+    var pointerHovered by remember { mutableStateOf(false) }
+    val hovered = hoverableHovered || pointerHovered
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(hovered) {
+        if (hovered) {
+            delay(280)
+            visible = true
+        } else {
+            visible = false
+        }
+    }
+    val gapPx = with(LocalDensity.current) { 8.dp.roundToPx() }
+    val position = remember(gapPx) {
+        object : PopupPositionProvider {
+            override fun calculatePosition(
+                anchorBounds: IntRect,
+                windowSize: IntSize,
+                layoutDirection: LayoutDirection,
+                popupContentSize: IntSize,
+            ): IntOffset = captionOffset(anchorBounds, windowSize, popupContentSize, gapPx)
+        }
+    }
+    Box(
+        modifier
+            .hoverable(hover)
+            .pointerInput(caption) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        when (event.type) {
+                            PointerEventType.Enter -> pointerHovered = true
+                            PointerEventType.Exit -> pointerHovered = false
+                            else -> Unit
+                        }
+                    }
+                }
+            },
+    ) {
+        content()
+        if (visible) {
+            Popup(
+                popupPositionProvider = position,
+                properties = PopupProperties(
+                    focusable = false,
+                    dismissOnBackPress = false,
+                    dismissOnClickOutside = false,
+                ),
+            ) {
+                Text(
+                    caption,
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Footer.copy(alpha = 0.96f))
+                        .border(1.dp, TileBorder, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
+        }
+    }
+}
+
+private fun captionOffset(
+    anchorBounds: IntRect,
+    windowSize: IntSize,
+    popupContentSize: IntSize,
+    gapPx: Int,
+): IntOffset {
+    val maxX = (windowSize.width - popupContentSize.width - 8).coerceAtLeast(8)
+    val x = (anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2).coerceIn(8, maxX)
+    val below = anchorBounds.bottom + gapPx
+    val y = if (below + popupContentSize.height <= windowSize.height - 8) {
+        below
+    } else {
+        (anchorBounds.top - popupContentSize.height - gapPx).coerceAtLeast(8)
+    }
+    return IntOffset(x, y)
+}
 
 fun Modifier.tileClick(onClick: () -> Unit): Modifier = composed {
     val source = remember { MutableInteractionSource() }

@@ -422,6 +422,9 @@ fun SettingsScreen() {
             SettingToggle("Win / Home opens menu", prefs.winOpensMenu) {
                 settings.update { p -> p.copy(winOpensMenu = !p.winOpensMenu) }
             }
+            SettingToggle("Show captions on hover", prefs.hoverCaptions) {
+                settings.update { p -> p.copy(hoverCaptions = !p.hoverCaptions) }
+            }
         }
 
         SettingsCard("Store") {

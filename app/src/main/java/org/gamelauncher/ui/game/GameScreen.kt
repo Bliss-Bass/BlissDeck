@@ -77,6 +77,7 @@ import org.gamelauncher.ui.components.AmbientBackdrop
 import org.gamelauncher.ui.components.GameIcon
 import org.gamelauncher.ui.components.ArtworkLayer
 import org.gamelauncher.ui.components.CoverArt
+import org.gamelauncher.ui.components.HoverCaption
 import org.gamelauncher.ui.components.ShoulderKey
 import org.gamelauncher.ui.components.SteamPill
 import org.gamelauncher.ui.components.tileClick
@@ -523,6 +524,8 @@ private fun ArtChoiceRow(
                         ArtSlot.Hero -> 168.dp to 54.dp
                         ArtSlot.Icon -> 64.dp to 64.dp
                     }
+                    val caption = if (option.isAppIcon) "App icon" else option.source
+                    HoverCaption(caption) {
                     Box(
                         modifier = Modifier
                             .width(w)
@@ -542,6 +545,7 @@ private fun ArtChoiceRow(
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
+                    }
                     }
                 }
             }
@@ -697,16 +701,18 @@ private fun Glyph(
     filled: Boolean = true,
     description: String? = null,
 ) {
-    Box(
-        modifier = Modifier
-            .size(52.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(Tile)
-            .clickable(onClick = onClick)
-            .then(if (description != null) Modifier.semantics { contentDescription = description } else Modifier),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, contentDescription = null, tint = if (filled) TextPrimary else TextMuted, modifier = Modifier.size(26.dp))
+    HoverCaption(description.orEmpty()) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Tile)
+                .clickable(onClick = onClick)
+                .then(if (description != null) Modifier.semantics { contentDescription = description } else Modifier),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = if (filled) TextPrimary else TextMuted, modifier = Modifier.size(26.dp))
+        }
     }
 }
 
