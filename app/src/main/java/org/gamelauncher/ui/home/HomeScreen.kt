@@ -1,5 +1,9 @@
 package org.gamelauncher.ui.home
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,11 +39,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import kotlin.math.abs
 import coil.compose.AsyncImage
 import org.gamelauncher.data.Game
 import org.gamelauncher.data.HomeFeedTab
@@ -130,6 +141,22 @@ fun HomeScreen(
     }
 }
 
+private val RecentHeroWidth = 680.dp
+private val RecentHeroHeight = 336.dp
+private val RecentThumb = 228.dp
+private val RecentPeek = 152.dp
+private val RecentHeroOverlap = 28.dp
+
+private fun recentCoverX(index: Int, selectedIndex: Int): Dp {
+    val leftStack = RecentPeek * selectedIndex
+    val delta = index - selectedIndex
+    return when {
+        delta < 0 -> RecentPeek * index
+        delta == 0 -> leftStack
+        else -> leftStack + RecentHeroWidth - RecentHeroOverlap + RecentPeek * (delta - 1)
+    }
+}
+
 @Composable
 private fun RecentsRow(
     recents: List<Game>,
@@ -137,16 +164,73 @@ private fun RecentsRow(
     onSelect: (String) -> Unit,
     onOpenGame: (String) -> Unit,
 ) {
+    val selectedIndex = recents.indexOfFirst { it.id == selectedId }.coerceAtLeast(0)
     val requesters = remember(recents.map { it.id }) { List(recents.size) { FocusRequester() } }
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        itemsIndexed(recents, key = { _, game -> game.id }) { index, game ->
-            RecentCard(
-                game = game,
-                selected = game.id == selectedId,
-                onFocused = { onSelect(game.id) },
-                modifier = Modifier.rowFocus(requesters, index),
-            ) {
-                if (selectedId == game.id) onOpenGame(game.id) else onSelect(game.id)
+    val spec = spring<Dp>(
+        dampingRatio = 0.84f,
+        stiffness = Spring.StiffnessMediumLow,
+    )
+    val rotSpec = spring<Float>(
+        dampingRatio = 0.84f,
+        stiffness = Spring.StiffnessMediumLow,
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(RecentHeroHeight),
+    ) {
+        recents.forEachIndexed { index, game ->
+            key(game.id) {
+                val delta = index - selectedIndex
+                val selected = delta == 0
+                val x by animateDpAsState(recentCoverX(index, selectedIndex), spec, label = "recent-x-$index")
+                val y by animateDpAsState(
+                    if (selected) 0.dp else (RecentHeroHeight - RecentThumb) / 2,
+                    spec,
+                    label = "recent-y-$index",
+                )
+                val rotationY by animateFloatAsState(
+                    when {
+                        selected -> 0f
+                        delta < 0 -> 8f
+                        else -> -8f
+                    },
+                    rotSpec,
+                    label = "recent-rot-$index",
+                )
+                val elevation by animateFloatAsState(
+                    if (selected) 12f else 4f - abs(delta).coerceAtMost(3),
+                    rotSpec,
+                    label = "recent-z-$index",
+                )
+                val scale by animateFloatAsState(
+                    when {
+                        selected -> 1f
+                        abs(delta) == 1 -> 0.97f
+                        else -> 0.92f
+                    },
+                    rotSpec,
+                    label = "recent-scale-$index",
+                )
+                RecentCard(
+                    game = game,
+                    selected = selected,
+                    onFocused = { onSelect(game.id) },
+                    modifier = Modifier
+                        .zIndex((recents.size - abs(delta)).toFloat() + if (selected) 6f else 0f)
+                        .offset(x, y)
+                        .graphicsLayer {
+                            this.rotationY = rotationY
+                            this.scaleX = scale
+                            this.scaleY = scale
+                            cameraDistance = 24f * density
+                            shadowElevation = elevation * density
+                            transformOrigin = TransformOrigin(0.5f, 0.5f)
+                        }
+                        .rowFocus(requesters, index),
+                ) {
+                    if (selectedId == game.id) onOpenGame(game.id) else onSelect(game.id)
+                }
             }
         }
     }
@@ -161,30 +245,43 @@ private fun RecentCard(
     onClick: () -> Unit,
 ) {
     val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
-    val shape = RoundedCornerShape(4.dp)
+    val shape = RoundedCornerShape(6.dp)
+    val spec = spring<Dp>(
+        dampingRatio = 0.84f,
+        stiffness = Spring.StiffnessMediumLow,
+    )
+    val width by animateDpAsState(if (selected) RecentHeroWidth else RecentThumb, spec, label = "recent-w")
+    val height by animateDpAsState(if (selected) RecentHeroHeight else RecentThumb, spec, label = "recent-h")
+    val iconPad by animateDpAsState(if (selected) 56.dp else 24.dp, spec, label = "recent-pad")
+    val titleAlpha by animateFloatAsState(
+        if (selected) 1f else 0f,
+        spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium),
+        label = "recent-title",
+    )
     Column(
         modifier = modifier
-            .width(680.dp)
+            .width(width)
+            .height(height)
             .tileFrame(selected, shape, onFocused)
             .background(Tile)
             .tileClick(onClick),
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(336.dp)
-                .background(hueBrush(game.coverHue, portrait = false)),
+                .fillMaxSize()
+                .background(hueBrush(game.coverHue, portrait = !selected)),
             contentAlignment = Alignment.Center,
         ) {
             ArtworkLayer(
                 artwork,
-                landscape = true,
+                landscape = selected,
                 preferIcon = true,
-                modifier = Modifier.padding(56.dp),
+                modifier = Modifier.padding(iconPad),
             )
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .graphicsLayer { alpha = titleAlpha }
                     .background(
                         Brush.verticalGradient(
                             listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)),
@@ -200,7 +297,8 @@ private fun RecentCard(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(18.dp),
+                    .padding(18.dp)
+                    .graphicsLayer { alpha = titleAlpha },
             )
         }
     }
