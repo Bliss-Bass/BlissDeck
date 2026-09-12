@@ -32,12 +32,14 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import org.gamelauncher.MainActivity
+import org.gamelauncher.data.AccountPhotoStore
 import org.gamelauncher.data.AppPresence
 import org.gamelauncher.data.ArtworkRepository
 import org.gamelauncher.data.CollectionsStore
 import org.gamelauncher.data.GameSession
 import org.gamelauncher.data.InstalledCatalog
 import org.gamelauncher.data.LauncherSettings
+import org.gamelauncher.data.LocalAccountPhoto
 import org.gamelauncher.data.LocalArtwork
 import org.gamelauncher.data.LocalCollections
 import org.gamelauncher.data.LocalDetails
@@ -84,6 +86,7 @@ fun LauncherApp(onClose: () -> Unit) {
         val snapshot = remember(context) { InstalledCatalog.load(context) }
         val newsRepo = remember(context) { PlayNewsRepository(context) }
         val settings = remember(context) { LauncherSettings(context) }
+        val accountPhoto = remember(context) { AccountPhotoStore(context) }
         val artwork = remember(context) { ArtworkRepository(context, newsRepo, settings) }
         val prefs by settings.state.collectAsState()
         val playHistory = remember(context) { PlayHistory(context) }
@@ -99,7 +102,7 @@ fun LauncherApp(onClose: () -> Unit) {
         val presence by AppPresence.snapshot.collectAsState()
         var fallbackRunning by remember { mutableStateOf(emptyList<RunningApp>()) }
         val current = stack.last()
-        LaunchedEffect(snapshot) { newsRepo.refresh(snapshot) }
+        LaunchedEffect(snapshot, prefs.whatsNewCount) { newsRepo.refresh(snapshot, prefs.whatsNewCount) }
         LaunchedEffect(news) { artwork.onPlayArtUpdated() }
         LaunchedEffect(menuOpen, presence.open, presence.connected) {
             fun refresh() {
@@ -186,6 +189,7 @@ fun LauncherApp(onClose: () -> Unit) {
         CompositionLocalProvider(
             LocalArtwork provides artwork,
             LocalSettings provides settings,
+            LocalAccountPhoto provides accountPhoto,
             LocalPlayHistory provides playHistory,
             LocalCollections provides collections,
             LocalDetails provides details,

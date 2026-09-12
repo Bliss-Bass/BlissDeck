@@ -7,30 +7,40 @@ import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.wifi.WifiInfo
+import android.net.wifi.WifiManager
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
-import android.os.BatteryManager
+
+enum class NetworkKind { Offline, Wifi, Ethernet, Cellular }
 
 data class DeviceStatus(
     val batteryPercent: Int,
     val charging: Boolean,
-    val wifiConnected: Boolean,
+    val network: NetworkKind,
+    val wifiLevel: Int = 0,
+    val wifiSsid: String? = null,
 )
 
 @Composable
 fun rememberDeviceStatus(): DeviceStatus {
     val context = LocalContext.current
-    var status by remember { mutableStateOf(initialStatus(context)) }
+    var status by remember { mutableStateOf(readStatus(context)) }
     DisposableEffect(context) {
+        val app = context.applicationContext
+        fun refreshNetwork() {
+            status = status.copyNetwork(readNetwork(app))
+        }
         val batteryReceiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
                 if (intent == null) return
@@ -41,13 +51,13 @@ fun rememberDeviceStatus(): DeviceStatus {
             }
         }
         val sticky = if (Build.VERSION.SDK_INT >= 33) {
-            context.registerReceiver(
+            app.registerReceiver(
                 batteryReceiver,
                 IntentFilter(Intent.ACTION_BATTERY_CHANGED),
                 Context.RECEIVER_NOT_EXPORTED,
             )
         } else {
-            context.registerReceiver(
+            app.registerReceiver(
                 batteryReceiver,
                 IntentFilter(Intent.ACTION_BATTERY_CHANGED),
             )
@@ -58,24 +68,32 @@ fun rememberDeviceStatus(): DeviceStatus {
                 charging = isCharging(sticky),
             )
         }
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                status = status.copy(wifiConnected = wifiConnected(cm))
-            }
-
-            override fun onLost(network: Network) {
-                status = status.copy(wifiConnected = wifiConnected(cm))
-            }
-
-            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-                status = status.copy(wifiConnected = wifiConnected(cm))
+        val wifiReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                refreshNetwork()
             }
         }
+        val wifiFilter = IntentFilter().apply {
+            addAction(WifiManager.RSSI_CHANGED_ACTION)
+            addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION)
+            addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
+        }
+        if (Build.VERSION.SDK_INT >= 33) {
+            app.registerReceiver(wifiReceiver, wifiFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            app.registerReceiver(wifiReceiver, wifiFilter)
+        }
+        val cm = app.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = refreshNetwork()
+            override fun onLost(network: Network) = refreshNetwork()
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = refreshNetwork()
+        }
         cm.registerDefaultNetworkCallback(callback, Handler(Looper.getMainLooper()))
-        status = status.copy(wifiConnected = wifiConnected(cm))
+        refreshNetwork()
         onDispose {
-            runCatching { context.unregisterReceiver(batteryReceiver) }
+            runCatching { app.unregisterReceiver(batteryReceiver) }
+            runCatching { app.unregisterReceiver(wifiReceiver) }
             runCatching { cm.unregisterNetworkCallback(callback) }
         }
     }
@@ -104,9 +122,72 @@ private fun invokeStatusBar(context: Context, method: String): Boolean {
     }.getOrDefault(false)
 }
 
-private fun initialStatus(context: Context): DeviceStatus {
+private fun readStatus(context: Context): DeviceStatus {
+    val app = context.applicationContext
+    val bm = app.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+    val percent = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).coerceIn(0, 100)
+    val charging = if (Build.VERSION.SDK_INT >= 23) bm.isCharging else false
+    val network = readNetwork(app)
+    return DeviceStatus(
+        batteryPercent = percent,
+        charging = charging,
+        network = network.kind,
+        wifiLevel = network.wifiLevel,
+        wifiSsid = network.wifiSsid,
+    )
+}
+
+private data class NetworkSnapshot(
+    val kind: NetworkKind,
+    val wifiLevel: Int = 0,
+    val wifiSsid: String? = null,
+)
+
+private fun DeviceStatus.copyNetwork(network: NetworkSnapshot) = copy(
+    network = network.kind,
+    wifiLevel = network.wifiLevel,
+    wifiSsid = network.wifiSsid,
+)
+
+private fun readNetwork(context: Context): NetworkSnapshot {
     val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    return DeviceStatus(100, charging = false, wifiConnected = wifiConnected(cm))
+    val network = cm.activeNetwork ?: return NetworkSnapshot(NetworkKind.Offline)
+    val caps = cm.getNetworkCapabilities(network) ?: return NetworkSnapshot(NetworkKind.Offline)
+    val online = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    return when {
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ->
+            NetworkSnapshot(NetworkKind.Ethernet)
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> {
+            val wifi = wifiDetails(context, caps)
+            NetworkSnapshot(
+                kind = if (online || wifi.second > 0) NetworkKind.Wifi else NetworkKind.Offline,
+                wifiLevel = wifi.second,
+                wifiSsid = wifi.first,
+            )
+        }
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) && online ->
+            NetworkSnapshot(NetworkKind.Cellular)
+        else -> NetworkSnapshot(if (online) NetworkKind.Cellular else NetworkKind.Offline)
+    }
+}
+
+private fun wifiDetails(context: Context, caps: NetworkCapabilities): Pair<String?, Int> {
+    val info = if (Build.VERSION.SDK_INT >= 31) {
+        caps.transportInfo as? WifiInfo
+    } else {
+        null
+    } ?: run {
+        val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        @Suppress("DEPRECATION")
+        wm.connectionInfo
+    }
+    val rssi = info.rssi
+    @Suppress("DEPRECATION")
+    val level = WifiManager.calculateSignalLevel(rssi, 5).coerceIn(0, 4)
+    val ssid = info.ssid
+        ?.trim('"')
+        ?.takeIf { it.isNotBlank() && !it.equals("<unknown ssid>", ignoreCase = true) }
+    return ssid to level
 }
 
 private fun batteryPercent(intent: Intent): Int {
@@ -121,8 +202,3 @@ private fun isCharging(intent: Intent): Boolean {
         status == BatteryManager.BATTERY_STATUS_FULL
 }
 
-private fun wifiConnected(cm: ConnectivityManager): Boolean {
-    val network = cm.activeNetwork ?: return false
-    val caps = cm.getNetworkCapabilities(network) ?: return false
-    return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-}

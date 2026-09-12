@@ -44,6 +44,7 @@ data class NewsItem(
     val gameId: String,
     val gameTitle: String,
     val imageUrl: String? = null,
+    val sortMillis: Long = 0L,
 )
 
 data class Screenshot(

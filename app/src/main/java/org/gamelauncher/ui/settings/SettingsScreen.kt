@@ -8,6 +8,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,10 +21,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -33,9 +39,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,6 +53,7 @@ import org.gamelauncher.data.ArtworkCoverStyle
 import org.gamelauncher.data.ArtworkIconSource
 import org.gamelauncher.data.CloseGameService
 import org.gamelauncher.data.GameSession
+import org.gamelauncher.data.LocalAccountPhoto
 import org.gamelauncher.data.LocalArtwork
 import org.gamelauncher.data.LocalSettings
 import org.gamelauncher.data.LocalThemeStore
@@ -161,6 +171,65 @@ fun SettingsScreen() {
                         .tileClick { exportTheme.launch("launcher-theme.ini") }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                 )
+            }
+        }
+
+        SettingsCard("Account") {
+            val photos = LocalAccountPhoto.current
+            val epoch by photos.epoch.collectAsState()
+            val bitmap = remember(epoch) { photos.bitmap() }
+            val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+                uri?.let { photos.setFrom(it) }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "Account photo",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape),
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.AccountCircle,
+                        contentDescription = "Account photo",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(56.dp),
+                    )
+                }
+                Spacer(Modifier.size(16.dp))
+                Column {
+                    Text(
+                        if (photos.hasCustom) "Custom photo" else "System user photo when available",
+                        color = TextMuted,
+                        fontSize = 13.sp,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            "Choose photo",
+                            color = PlayGreen,
+                            fontSize = 15.sp,
+                            modifier = Modifier
+                                .tileFrame(false, RoundedCornerShape(4.dp), width = 2.dp)
+                                .tileClick { pickPhoto.launch("image/*") }
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                        )
+                        if (photos.hasCustom) {
+                            Text(
+                                "Use system",
+                                color = TextPrimary,
+                                fontSize = 15.sp,
+                                modifier = Modifier
+                                    .tileFrame(false, RoundedCornerShape(4.dp), width = 2.dp)
+                                    .tileClick { photos.clearCustom() }
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -372,6 +441,12 @@ fun SettingsScreen() {
                     pack.copy(layouts = pack.layouts.copy(gameInfo = !pack.layouts.gameInfo))
                 }
             }
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "What's New entries",
+                listOf(8 to "8", 16 to "16", 32 to "32"),
+                prefs.whatsNewCount,
+            ) { settings.update { p -> p.copy(whatsNewCount = it) } }
         }
 
         SettingsCard("Recents") {

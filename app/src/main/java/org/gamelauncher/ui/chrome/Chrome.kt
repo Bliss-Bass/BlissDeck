@@ -1,5 +1,6 @@
 package org.gamelauncher.ui.chrome
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -14,21 +15,32 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Battery0Bar
+import androidx.compose.material.icons.filled.Battery2Bar
+import androidx.compose.material.icons.filled.Battery3Bar
+import androidx.compose.material.icons.filled.Battery4Bar
+import androidx.compose.material.icons.filled.Battery5Bar
+import androidx.compose.material.icons.filled.Battery6Bar
 import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.BatteryFull
-import androidx.compose.material.icons.filled.BatteryStd
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SettingsEthernet
+import androidx.compose.material.icons.filled.SignalCellularAlt
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.Wifi1Bar
+import androidx.compose.material.icons.filled.Wifi2Bar
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Home
@@ -39,6 +51,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,7 +64,9 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import org.gamelauncher.data.GameSession
+import org.gamelauncher.data.LocalAccountPhoto
 import org.gamelauncher.data.LocalTheme
 import org.gamelauncher.data.RunningApp
 import org.gamelauncher.data.ThemeIconStyle
@@ -184,8 +200,8 @@ fun TopStatusBar(
             Spacer(Modifier.width(8.dp))
         }
         TopBarIcon(
-            icon = if (status.wifiConnected) Icons.Default.Wifi else Icons.Default.WifiOff,
-            label = if (status.wifiConnected) "Wi-Fi connected" else "Wi-Fi off",
+            icon = networkIcon(status),
+            label = networkLabel(status),
             tint = iconTint,
             onClick = { expandNotificationShade(context) },
         )
@@ -198,6 +214,7 @@ fun TopStatusBar(
                 "Battery ${status.batteryPercent}%"
             },
             tint = iconTint,
+            badge = "${status.batteryPercent}%",
             onClick = { expandNotificationShade(context) },
         )
         Spacer(Modifier.width(8.dp))
@@ -212,29 +229,26 @@ fun TopStatusBar(
                 .padding(horizontal = 8.dp, vertical = 4.dp),
         )
         Spacer(Modifier.width(12.dp))
-        HoverCaption("Account") {
-            Box(
-                modifier = Modifier
-                    .tileFrame(false, RoundedCornerShape(8.dp), width = 3.dp)
-                    .tileClick(onUserMenu)
-                    .padding(4.dp),
-            ) {
-                DiamondMark(32.dp)
-            }
-        }
+        AccountButton(iconTint, onUserMenu)
     }
     }
 }
 
 @Composable
-private fun TopBarIcon(icon: ImageVector, label: String, tint: Color, onClick: () -> Unit) {
+private fun TopBarIcon(
+    icon: ImageVector,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit,
+    badge: String? = null,
+) {
     HoverCaption(label) {
-        Box(
+        Row(
             modifier = Modifier
                 .tileFrame(false, RoundedCornerShape(8.dp), width = 3.dp)
                 .tileClick(onClick)
-                .padding(6.dp),
-            contentAlignment = Alignment.Center,
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 icon,
@@ -242,15 +256,85 @@ private fun TopBarIcon(icon: ImageVector, label: String, tint: Color, onClick: (
                 tint = tint,
                 modifier = Modifier.size(22.dp),
             )
+            if (!badge.isNullOrBlank()) {
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    badge,
+                    color = tint,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun AccountButton(tint: Color, onClick: () -> Unit) {
+    val store = LocalAccountPhoto.current
+    val epoch by store.epoch.collectAsState()
+    val photo = remember(epoch) { store.bitmap() }
+    HoverCaption("Account") {
+        Box(
+            modifier = Modifier
+                .tileFrame(false, RoundedCornerShape(8.dp), width = 3.dp)
+                .tileClick(onClick)
+                .padding(4.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (photo != null) {
+                Image(
+                    bitmap = photo.asImageBitmap(),
+                    contentDescription = "Account",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape),
+                )
+            } else {
+                Icon(
+                    Icons.Default.AccountCircle,
+                    contentDescription = "Account",
+                    tint = tint,
+                    modifier = Modifier.size(32.dp),
+                )
+            }
+        }
+    }
+}
+
+private fun networkIcon(status: DeviceStatus) = when (status.network) {
+    NetworkKind.Ethernet -> Icons.Default.SettingsEthernet
+    NetworkKind.Cellular -> Icons.Default.SignalCellularAlt
+    NetworkKind.Offline -> Icons.Default.WifiOff
+    NetworkKind.Wifi -> when (status.wifiLevel) {
+        0, 1 -> Icons.Default.Wifi1Bar
+        2 -> Icons.Default.Wifi2Bar
+        else -> Icons.Default.Wifi
+    }
+}
+
+private fun networkLabel(status: DeviceStatus) = when (status.network) {
+    NetworkKind.Ethernet -> "Ethernet"
+    NetworkKind.Cellular -> "Mobile data"
+    NetworkKind.Offline -> "No network"
+    NetworkKind.Wifi -> buildString {
+        append("Wi-Fi")
+        if (status.wifiLevel > 0) append(" ${status.wifiLevel}/4")
+        status.wifiSsid?.let { append(" · $it") }
     }
 }
 
 private fun batteryIcon(status: DeviceStatus) = when {
     status.charging -> Icons.Default.BatteryChargingFull
-    status.batteryPercent <= 15 -> Icons.Default.BatteryAlert
-    status.batteryPercent >= 85 -> Icons.Default.BatteryFull
-    else -> Icons.Default.BatteryStd
+    status.batteryPercent <= 8 -> Icons.Default.BatteryAlert
+    status.batteryPercent <= 15 -> Icons.Default.Battery0Bar
+    status.batteryPercent <= 30 -> Icons.Default.Battery2Bar
+    status.batteryPercent <= 45 -> Icons.Default.Battery3Bar
+    status.batteryPercent <= 60 -> Icons.Default.Battery4Bar
+    status.batteryPercent <= 75 -> Icons.Default.Battery5Bar
+    status.batteryPercent <= 90 -> Icons.Default.Battery6Bar
+    else -> Icons.Default.BatteryFull
 }
 
 @Composable

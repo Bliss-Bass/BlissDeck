@@ -4,6 +4,14 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
+internal data class SteamNewsHit(
+    val gid: String,
+    val title: String,
+    val body: String,
+    val dateMillis: Long,
+    val dateDisplay: String,
+)
+
 internal class SteamStoreClient {
     fun details(appId: String): TitleDetails? {
         if (appId.isBlank()) return null
@@ -40,6 +48,31 @@ internal class SteamStoreClient {
             rating = reviewStars(appId),
             screenshots = screenshots,
         )
+    }
+
+    fun news(appId: String, count: Int = 8): List<SteamNewsHit> {
+        if (appId.isBlank()) return emptyList()
+        val json = get("$API/ISteamNews/GetNewsForApp/v2/?appid=$appId&count=$count&maxlength=400&format=json")
+            ?: return emptyList()
+        val items = json.optJSONObject("appnews")?.optJSONArray("newsitems") ?: return emptyList()
+        return buildList {
+            for (i in 0 until items.length()) {
+                val item = items.optJSONObject(i) ?: continue
+                val title = item.optString("title").trim()
+                val gid = item.optString("gid").ifBlank { item.optString("gid", i.toString()) }
+                if (title.isBlank()) continue
+                val millis = item.optLong("date") * 1000L
+                add(
+                    SteamNewsHit(
+                        gid = gid.ifBlank { "$appId-$i" },
+                        title = title,
+                        body = bbcodeToPlain(item.optString("contents")),
+                        dateMillis = millis,
+                        dateDisplay = formatNewsDate(millis),
+                    ),
+                )
+            }
+        }
     }
 
     private fun reviewStars(appId: String): Float {
@@ -95,7 +128,32 @@ internal class SteamStoreClient {
 
     companion object {
         private const val STORE = "https://store.steampowered.com"
+        private const val API = "https://api.steampowered.com"
         private const val USER_AGENT =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+        internal fun cleanNews(source: String): String =
+            source
+                .replace(Regex("\\[/?[^\\]]+]"), " ")
+                .replace(Regex("<[^>]+>"), " ")
+                .replace(Regex("\\{[^}]+\\}"), " ")
+                .replace(Regex("""(?i)\bhref\s*=\s*"[^"]*"?"""), "")
+                .replace("<", " ")
+                .replace(">", " ")
+                .replace("&amp;", "&")
+                .replace("&quot;", "\"")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace(Regex("https?://\\S+"), "")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+                .take(220)
+
+        private fun bbcodeToPlain(source: String): String = cleanNews(source)
+
+        private fun formatNewsDate(millis: Long): String {
+            if (millis <= 0L) return ""
+            return java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale.US).format(java.util.Date(millis))
+        }
     }
 }

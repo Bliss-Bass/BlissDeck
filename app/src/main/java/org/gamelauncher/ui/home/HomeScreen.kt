@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -167,7 +169,7 @@ fun HomeScreen(
         when (feed) {
             HomeFeedTab.WhatsNew -> {
                 when {
-                    news.isNotEmpty() -> WhatsNewRow(news, snapshot, onOpenGame)
+                    news.isNotEmpty() -> WhatsNewTimeline(news, snapshot, onOpenGame)
                     newsLoading -> EmptyCenter("Checking Play Store…")
                     else -> EmptyCenter("No news yet")
                 }
@@ -529,118 +531,136 @@ private fun FeedTabs(selected: HomeFeedTab, onSelect: (HomeFeedTab) -> Unit) {
 }
 
 @Composable
-private fun WhatsNewRow(
+private fun WhatsNewTimeline(
     news: List<NewsItem>,
     snapshot: LibrarySnapshot,
     onOpenGame: (String) -> Unit,
 ) {
-    var selectedNews by remember { mutableStateOf<String?>(null) }
-    val cards = news.mapNotNull { item ->
+    val rows = news.mapNotNull { item ->
         snapshot.findEntry(item.gameId)?.let { item to it }
     }
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        itemsIndexed(cards, key = { _, pair -> pair.first.id }) { _, (item, game) ->
-            NewsCard(
-                item,
-                game,
-                selected = item.id == selectedNews,
-                onFocused = { selectedNews = item.id },
+    if (rows.isEmpty()) {
+        EmptyCenter("No news yet")
+        return
+    }
+    Column {
+        rows.forEachIndexed { index, (item, game) ->
+            TimelineRow(
+                item = item,
+                game = game,
+                last = index == rows.lastIndex,
             ) { onOpenGame(item.gameId) }
         }
     }
 }
 
 @Composable
-private fun NewsCard(
+private fun TimelineRow(
     item: NewsItem,
     game: Game,
-    selected: Boolean,
-    onFocused: () -> Unit,
-    modifier: Modifier = Modifier,
+    last: Boolean,
     onClick: () -> Unit,
 ) {
     val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
     val headerUrl = artwork.imageUrl(landscape = true) ?: item.imageUrl
     val kindColor = if (item.kind.contains("BUG", ignoreCase = true)) NewsBugfix else NewsUpdate
-    val shape = RoundedCornerShape(4.dp)
-    Column(
-        modifier = modifier
-            .width(360.dp)
-            .tileFrame(selected, shape, onFocused)
-            .background(Tile)
-            .tileClick(onClick),
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .tileClick(onClick)
+            .padding(bottom = if (last) 0.dp else 4.dp),
     ) {
+        Column(
+            modifier = Modifier
+                .width(108.dp)
+                .padding(top = 4.dp, end = 10.dp),
+            horizontalAlignment = Alignment.End,
+        ) {
+            Text(
+                item.date.ifBlank { "Recent" },
+                color = TextMuted,
+                fontSize = 13.sp,
+                maxLines = 2,
+            )
+        }
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(118.dp)
-                .background(hueBrush(game.coverHue, portrait = false)),
+                .width(18.dp)
+                .fillMaxHeight(),
+            contentAlignment = Alignment.TopCenter,
         ) {
-            if (headerUrl != null) {
-                AsyncImage(
-                    model = headerUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
+            if (!last) {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 14.dp)
+                        .width(2.dp)
+                        .fillMaxHeight()
+                        .background(Tile),
                 )
-            } else {
-                ArtworkLayer(artwork, landscape = true)
             }
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = 0.15f), Color.Black.copy(alpha = 0.72f)),
-                        ),
-                    ),
+                    .padding(top = 8.dp)
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(kindColor),
             )
-            Text(
-                item.kind,
-                color = kindColor,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp,
-                modifier = Modifier.padding(12.dp),
-            )
-            if (item.body.isNotBlank()) {
-                Text(
-                    item.body,
-                    color = TextPrimary,
-                    fontSize = 13.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(12.dp),
-                )
-            }
         }
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-            if (item.date.isNotBlank()) {
-                Text(item.date, color = TextMuted, fontSize = 13.sp)
-                Spacer(Modifier.height(4.dp))
-            }
-            Text(
-                item.version,
-                color = TextPrimary,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .clip(CircleShape)
-                        .background(hueBrush(game.coverHue)),
-                ) {
-                    ArtworkLayer(artwork, landscape = false, preferIcon = true)
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp, bottom = 16.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Tile)
+                .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(108.dp)
+                    .height(60.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(hueBrush(game.coverHue, portrait = false)),
+            ) {
+                if (headerUrl != null) {
+                    AsyncImage(
+                        model = headerUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    ArtworkLayer(artwork, landscape = true)
                 }
-                Spacer(Modifier.width(8.dp))
-                Text(item.gameTitle, color = TextPrimary, fontSize = 14.sp)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    item.kind,
+                    color = kindColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                )
+                Text(
+                    item.version,
+                    color = TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (item.body.isNotBlank()) {
+                    Text(
+                        item.body,
+                        color = TextMuted,
+                        fontSize = 13.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(item.gameTitle, color = TextPrimary, fontSize = 13.sp)
             }
         }
     }
