@@ -1,12 +1,49 @@
-apks/
-screenshots/
+# Gradle / Kotlin
 .gradle/
 **/build/
-local.properties
-*.iml
 .kotlin/
-.DS_Store
-captures/
+
+# Android SDK path (machine-local)
+local.properties
+
+# IDE
+*.iml
+.idea/
+*.ipr
+*.iws
+.vscode/
+
+# Native / Studio captures
 .cxx/
+.externalNativeBuild/
+captures/
+
+# Signed and unsigned packages
+*.apk
+*.ap_
+*.aab
+*.idsig
 app/release/
 app/debug/
+apks/
+
+# Signing material
+*.jks
+*.keystore
+*.key
+keystore.properties
+
+# Local screenshots and recordings (not curated docs)
+screenshots/
+*.mp4
+
+# OS / junk
+.DS_Store
+Thumbs.db
+*.log
+hs_err_pid*
+
+# Cursor local state; project rules under .cursor/rules/ stay tracked
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
