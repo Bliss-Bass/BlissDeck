@@ -26,6 +26,7 @@ data class LauncherPrefs(
     val escAsBack: Boolean = true,
     val bAsBack: Boolean = true,
     val winOpensMenu: Boolean = true,
+    val storePackage: String = "",
 )
 
 data class RecentsMetrics(
@@ -71,6 +72,7 @@ class LauncherSettings(context: Context) {
         escAsBack = prefs.getBoolean(KEY_ESC, true),
         bAsBack = prefs.getBoolean(KEY_B, true),
         winOpensMenu = prefs.getBoolean(KEY_WIN, true),
+        storePackage = prefs.getString(KEY_STORE, "").orEmpty(),
     )
 
     private fun write(value: LauncherPrefs) {
@@ -85,6 +87,7 @@ class LauncherSettings(context: Context) {
             .putBoolean(KEY_ESC, value.escAsBack)
             .putBoolean(KEY_B, value.bAsBack)
             .putBoolean(KEY_WIN, value.winOpensMenu)
+            .putString(KEY_STORE, value.storePackage)
             .apply()
     }
 
@@ -99,6 +102,7 @@ class LauncherSettings(context: Context) {
         const val KEY_ESC = "esc_as_back"
         const val KEY_B = "b_as_back"
         const val KEY_WIN = "win_opens_menu"
+        const val KEY_STORE = "store_package"
     }
 }
 
