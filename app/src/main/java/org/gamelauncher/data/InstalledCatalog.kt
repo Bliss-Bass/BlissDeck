@@ -12,8 +12,7 @@ object InstalledCatalog {
     fun load(context: Context): LibrarySnapshot {
         val pm = context.packageManager
         val self = context.packageName
-        val launch = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val resolved = queryLaunchers(pm, launch)
+        val resolved = launcherActivities(pm)
             .distinctBy { it.activityInfo.packageName }
             .filter { it.activityInfo.packageName != self }
             .sortedBy { it.loadLabel(pm).toString().lowercase() }
@@ -27,6 +26,14 @@ object InstalledCatalog {
             installed = installed,
             news = emptyList(),
         )
+    }
+
+    fun launcherPackages(context: Context): List<String> {
+        val self = context.packageName
+        return launcherActivities(context.packageManager)
+            .map { it.activityInfo.packageName }
+            .distinct()
+            .filter { it != self }
     }
 }
 
@@ -52,7 +59,8 @@ fun InstalledApp.toGame(): Game = Game(
     coverHue = coverHue,
 )
 
-private fun queryLaunchers(pm: PackageManager, intent: Intent): List<ResolveInfo> {
+private fun launcherActivities(pm: PackageManager): List<ResolveInfo> {
+    val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
     return if (Build.VERSION.SDK_INT >= 33) {
         pm.queryIntentActivities(
             intent,

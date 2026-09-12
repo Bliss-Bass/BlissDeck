@@ -14,6 +14,11 @@ internal data class PlayListing(
     val updatedMillis: Long?,
     val backgroundUrl: String?,
     val heroUrl: String?,
+    val description: String?,
+    val developer: String?,
+    val category: String?,
+    val rating: Float,
+    val screenshots: List<String>,
 )
 
 internal class PlayStoreClient {
@@ -74,6 +79,7 @@ internal class PlayStoreClient {
                 ?.let { fullSizePlayImage(it) }
             val hero = pickLandscapeHero(html) ?: background?.takeIf { looksWide(it, html) }
             val whatsNew = htmlToPlain(rawWhats.orEmpty()).ifBlank { null }
+            val description = ogDescription(html) ?: whatsNew
             if (title.isNullOrBlank() && version.isNullOrBlank() && rawDate.isNullOrBlank()) {
                 return null
             }
@@ -86,6 +92,11 @@ internal class PlayStoreClient {
                 updatedMillis = parsedDate?.first,
                 backgroundUrl = hero ?: background,
                 heroUrl = hero,
+                description = description,
+                developer = playDeveloper(html),
+                category = playCategory(html),
+                rating = playRating(html),
+                screenshots = landscapeShots(html),
             )
         }
 
@@ -105,6 +116,55 @@ internal class PlayStoreClient {
                 break
             }
             return bestToken?.let { fullSizePlayImage(it) }
+        }
+
+        internal fun landscapeShots(html: String, limit: Int = 6): List<String> {
+            val seen = LinkedHashSet<String>()
+            for (match in PLAY_LH.findAll(html)) {
+                val url = match.value.replace("&amp;", "&").replace("\\u003d", "=")
+                val token = url.substringBefore("=")
+                val size = PLAY_SIZE.find(url) ?: continue
+                val width = size.groupValues[1].toInt()
+                val height = size.groupValues[2].toInt()
+                if (width < 400 || height < 200 || width < height * 1.15f) continue
+                if (seen.add(fullSizePlayImage(token)) && seen.size >= limit) break
+            }
+            return seen.toList()
+        }
+
+        private fun ogDescription(html: String): String? {
+            val raw = Regex("""property="og:description" content="([^"]+)"""")
+                .find(html)?.groupValues?.get(1) ?: return null
+            return htmlToPlain(raw.replace("&amp;", "&")).takeIf { it.isNotBlank() }
+        }
+
+        private fun playDeveloper(html: String): String? {
+            val named = Regex("""/store/apps/developer\?id=([^"&]+)"[^>]*>([^<]+)""")
+                .find(html)
+            if (named != null) {
+                val label = htmlToPlain(named.groupValues[2]).ifBlank {
+                    named.groupValues[1].replace("+", " ")
+                }
+                return label.takeIf { it.isNotBlank() }
+            }
+            val idOnly = Regex("""/store/apps/dev(?:eloper)?\?id=([^"&]+)""")
+                .find(html)?.groupValues?.get(1) ?: return null
+            return idOnly.replace("+", " ").takeIf { it.isNotBlank() && !it.all { ch -> ch.isDigit() } }
+        }
+
+        private fun playCategory(html: String): String? {
+            val match = Regex("""/store/apps/category/([A-Z0-9_]+)"[^>]*>([^<]+)""")
+                .find(html) ?: return null
+            val label = htmlToPlain(match.groupValues[2])
+            return label.ifBlank { match.groupValues[1].replace('_', ' ').lowercase(Locale.US) }
+        }
+
+        private fun playRating(html: String): Float {
+            val labeled = Regex("""Rated ([0-9.]+) stars""").find(html)?.groupValues?.get(1)
+            val json = Regex(""""starRating":\{"value":([0-9.]+)""").find(html)?.groupValues?.get(1)
+            val item = Regex("""itemprop="ratingValue" content="([0-9.]+)"""").find(html)?.groupValues?.get(1)
+            val raw = labeled ?: json ?: item ?: return 0f
+            return raw.toFloatOrNull()?.coerceIn(0f, 5f) ?: 0f
         }
 
         private fun looksWide(url: String, html: String): Boolean {

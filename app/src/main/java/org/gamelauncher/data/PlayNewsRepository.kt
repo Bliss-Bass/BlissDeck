@@ -129,6 +129,19 @@ class PlayNewsRepository(context: Context) {
         }.getOrNull()
     }
 
+    fun details(packageName: String): TitleDetails? {
+        val cached = runCatching {
+            val file = cacheFile(packageName)
+            if (!file.isFile) null else CachedListing.fromJson(JSONObject(file.readText()))
+        }.getOrNull()
+        if (cached != null && !cached.stale() && cached.hasDetailsField && !cached.missing) {
+            return cached.toDetails()
+        }
+        val next = client.fetch(packageName).toCached()
+        writeCache(packageName, next)
+        return next.takeIf { !it.missing }?.toDetails()
+    }
+
     companion object {
         private const val TAG = "PlayNews"
         private const val OTHER_APP_WINDOW_MS = 120L * 24 * 60 * 60 * 1000
@@ -146,9 +159,16 @@ internal data class CachedListing(
     val queriedAt: Long,
     val missing: Boolean,
     val hasHeroField: Boolean = true,
+    val description: String? = null,
+    val developer: String? = null,
+    val category: String? = null,
+    val rating: Float = 0f,
+    val screenshots: List<String> = emptyList(),
+    val hasDetailsField: Boolean = true,
 ) {
     fun stale(): Boolean {
         if (!missing && !hasHeroField) return true
+        if (!missing && !hasDetailsField) return true
         val ttl = if (missing) MISS_TTL_MS else HIT_TTL_MS
         return System.currentTimeMillis() - queriedAt > ttl
     }
@@ -167,6 +187,18 @@ internal data class CachedListing(
         )
     }
 
+    fun toDetails(): TitleDetails = TitleDetails(
+        summary = description ?: whatsNew.orEmpty(),
+        developer = developer.orEmpty(),
+        publisher = developer.orEmpty(),
+        category = category.orEmpty(),
+        releaseDate = updatedDisplay.orEmpty(),
+        players = "",
+        controller = "",
+        rating = rating,
+        screenshots = screenshots,
+    )
+
     fun toJson(): JSONObject = JSONObject().apply {
         put("title", title)
         put("whats_new", whatsNew)
@@ -177,6 +209,11 @@ internal data class CachedListing(
         put("hero", heroUrl ?: "")
         put("queried_at", queriedAt)
         put("missing", missing)
+        put("description", description)
+        put("developer", developer)
+        put("category", category)
+        put("rating", rating.toDouble())
+        put("screenshots", org.json.JSONArray(screenshots))
     }
 
     companion object {
@@ -194,6 +231,17 @@ internal data class CachedListing(
             queriedAt = json.optLong("queried_at"),
             missing = json.optBoolean("missing"),
             hasHeroField = json.has("hero"),
+            description = json.optString("description").ifBlank { null },
+            developer = json.optString("developer").ifBlank { null },
+            category = json.optString("category").ifBlank { null },
+            rating = json.optDouble("rating").toFloat(),
+            screenshots = buildList {
+                val array = json.optJSONArray("screenshots") ?: return@buildList
+                for (i in 0 until array.length()) {
+                    array.optString(i).takeIf { it.isNotBlank() }?.let { add(it) }
+                }
+            },
+            hasDetailsField = json.has("description"),
         )
     }
 }
@@ -213,6 +261,12 @@ private fun PlayListing?.toCached(): CachedListing {
         heroUrl = heroUrl,
         queriedAt = now,
         missing = title.isNullOrBlank() && version.isNullOrBlank() && updatedDisplay.isNullOrBlank(),
+        description = description,
+        developer = developer,
+        category = category,
+        rating = rating,
+        screenshots = screenshots,
+        hasDetailsField = true,
     )
 }
 
