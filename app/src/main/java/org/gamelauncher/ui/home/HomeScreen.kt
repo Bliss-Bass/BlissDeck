@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -53,9 +54,15 @@ import coil.compose.AsyncImage
 import org.gamelauncher.data.Game
 import org.gamelauncher.data.HomeFeedTab
 import org.gamelauncher.data.InstalledApp
+import org.gamelauncher.data.LauncherPrefs
 import org.gamelauncher.data.LibrarySnapshot
+import org.gamelauncher.data.LocalSettings
 import org.gamelauncher.data.NewsItem
+import org.gamelauncher.data.RecentsArt
+import org.gamelauncher.data.RecentsLayout
+import org.gamelauncher.data.RecentsMetrics
 import org.gamelauncher.data.findEntry
+import org.gamelauncher.data.recentsMetrics
 import org.gamelauncher.data.toGame
 import org.gamelauncher.ui.components.AmbientBackdrop
 import org.gamelauncher.ui.components.AppIconTile
@@ -96,9 +103,11 @@ fun HomeScreen(
     var feed by remember { mutableStateOf(HomeFeedTab.WhatsNew) }
     val selected = recents.firstOrNull { it.id == selectedId } ?: recents.first()
     val selectedArt = rememberArtwork(selected.packageName, selected.title, selected.inLibrary)
+    val settings = LocalSettings.current
+    val prefs by settings.state.collectAsState()
 
     Box(Modifier.fillMaxSize()) {
-        AmbientBackdrop(selectedArt)
+        if (prefs.ambientBackdrop) AmbientBackdrop(selectedArt)
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -107,21 +116,23 @@ fun HomeScreen(
         ) {
         Text("Recent games", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(14.dp))
-        RecentsRow(recents, selectedId, onSelect = { selectedId = it }, onOpenGame = onOpenGame)
-        Spacer(Modifier.height(18.dp))
-        Text(selected.title, color = TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = PlayGreen, modifier = Modifier.size(28.dp))
-            Text(
-                "PLAY NOW!",
-                color = PlayGreen,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                modifier = Modifier
-                    .tileFrame(false, RoundedCornerShape(4.dp), width = 2.dp)
-                    .tileClick { onOpenGame(selected.id) }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-            )
+        RecentsRow(recents, selectedId, prefs, onSelect = { selectedId = it }, onOpenGame = onOpenGame)
+        if (prefs.showSelectedTitle) {
+            Spacer(Modifier.height(18.dp))
+            Text(selected.title, color = TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = PlayGreen, modifier = Modifier.size(28.dp))
+                Text(
+                    "PLAY NOW!",
+                    color = PlayGreen,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    modifier = Modifier
+                        .tileFrame(false, RoundedCornerShape(4.dp), width = 2.dp)
+                        .tileClick { onOpenGame(selected.id) }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
         }
         Spacer(Modifier.height(28.dp))
         FeedTabs(feed) { feed = it }
@@ -141,19 +152,17 @@ fun HomeScreen(
     }
 }
 
-private val RecentHeroWidth = 680.dp
-private val RecentHeroHeight = 336.dp
-private val RecentThumb = 228.dp
-private val RecentPeek = 152.dp
-private val RecentHeroOverlap = 28.dp
-
-private fun recentCoverX(index: Int, selectedIndex: Int): Dp {
-    val leftStack = RecentPeek * selectedIndex
+private fun recentCoverX(
+    index: Int,
+    selectedIndex: Int,
+    metrics: RecentsMetrics,
+): Dp {
+    val leftStack = metrics.peek * selectedIndex
     val delta = index - selectedIndex
     return when {
-        delta < 0 -> RecentPeek * index
+        delta < 0 -> metrics.peek * index
         delta == 0 -> leftStack
-        else -> leftStack + RecentHeroWidth - RecentHeroOverlap + RecentPeek * (delta - 1)
+        else -> leftStack + metrics.heroWidth - metrics.overlap + metrics.peek * (delta - 1)
     }
 }
 
@@ -161,9 +170,53 @@ private fun recentCoverX(index: Int, selectedIndex: Int): Dp {
 private fun RecentsRow(
     recents: List<Game>,
     selectedId: String,
+    prefs: LauncherPrefs,
     onSelect: (String) -> Unit,
     onOpenGame: (String) -> Unit,
 ) {
+    if (prefs.recentsLayout == RecentsLayout.Row) {
+        RecentsStrip(recents, selectedId, prefs, onSelect, onOpenGame)
+    } else {
+        RecentsCoverflow(recents, selectedId, prefs, onSelect, onOpenGame)
+    }
+}
+
+@Composable
+private fun RecentsStrip(
+    recents: List<Game>,
+    selectedId: String,
+    prefs: LauncherPrefs,
+    onSelect: (String) -> Unit,
+    onOpenGame: (String) -> Unit,
+) {
+    val metrics = prefs.recentsMetrics()
+    val requesters = remember(recents.map { it.id }) { List(recents.size) { FocusRequester() } }
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        itemsIndexed(recents, key = { _, game -> game.id }) { index, game ->
+            RecentCard(
+                game = game,
+                selected = game.id == selectedId,
+                growSelected = false,
+                metrics = metrics,
+                preferIcon = prefs.recentsArt == RecentsArt.Icon,
+                onFocused = { onSelect(game.id) },
+                modifier = Modifier.rowFocus(requesters, index),
+            ) {
+                if (selectedId == game.id) onOpenGame(game.id) else onSelect(game.id)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentsCoverflow(
+    recents: List<Game>,
+    selectedId: String,
+    prefs: LauncherPrefs,
+    onSelect: (String) -> Unit,
+    onOpenGame: (String) -> Unit,
+) {
+    val metrics = prefs.recentsMetrics()
     val selectedIndex = recents.indexOfFirst { it.id == selectedId }.coerceAtLeast(0)
     val requesters = remember(recents.map { it.id }) { List(recents.size) { FocusRequester() } }
     val spec = spring<Dp>(
@@ -174,26 +227,27 @@ private fun RecentsRow(
         dampingRatio = 0.84f,
         stiffness = Spring.StiffnessMediumLow,
     )
+    val tilt = if (prefs.recentsTilt) 8f else 0f
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(RecentHeroHeight),
+            .height(metrics.heroHeight),
     ) {
         recents.forEachIndexed { index, game ->
             key(game.id) {
                 val delta = index - selectedIndex
                 val selected = delta == 0
-                val x by animateDpAsState(recentCoverX(index, selectedIndex), spec, label = "recent-x-$index")
+                val x by animateDpAsState(recentCoverX(index, selectedIndex, metrics), spec, label = "recent-x-$index")
                 val y by animateDpAsState(
-                    if (selected) 0.dp else (RecentHeroHeight - RecentThumb) / 2,
+                    if (selected) 0.dp else (metrics.heroHeight - metrics.thumbHeight) / 2,
                     spec,
                     label = "recent-y-$index",
                 )
                 val rotationY by animateFloatAsState(
                     when {
-                        selected -> 0f
-                        delta < 0 -> 8f
-                        else -> -8f
+                        selected || !prefs.recentsTilt -> 0f
+                        delta < 0 -> tilt
+                        else -> -tilt
                     },
                     rotSpec,
                     label = "recent-rot-$index",
@@ -215,6 +269,9 @@ private fun RecentsRow(
                 RecentCard(
                     game = game,
                     selected = selected,
+                    growSelected = true,
+                    metrics = metrics,
+                    preferIcon = prefs.recentsArt == RecentsArt.Icon,
                     onFocused = { onSelect(game.id) },
                     modifier = Modifier
                         .zIndex((recents.size - abs(delta)).toFloat() + if (selected) 6f else 0f)
@@ -240,6 +297,9 @@ private fun RecentsRow(
 private fun RecentCard(
     game: Game,
     selected: Boolean,
+    growSelected: Boolean,
+    metrics: RecentsMetrics,
+    preferIcon: Boolean,
     onFocused: () -> Unit,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
@@ -250,9 +310,10 @@ private fun RecentCard(
         dampingRatio = 0.84f,
         stiffness = Spring.StiffnessMediumLow,
     )
-    val width by animateDpAsState(if (selected) RecentHeroWidth else RecentThumb, spec, label = "recent-w")
-    val height by animateDpAsState(if (selected) RecentHeroHeight else RecentThumb, spec, label = "recent-h")
-    val iconPad by animateDpAsState(if (selected) 56.dp else 24.dp, spec, label = "recent-pad")
+    val wide = growSelected && selected
+    val width by animateDpAsState(if (wide) metrics.heroWidth else metrics.thumbWidth, spec, label = "recent-w")
+    val height by animateDpAsState(if (wide) metrics.heroHeight else metrics.thumbHeight, spec, label = "recent-h")
+    val iconPad by animateDpAsState(if (wide) 56.dp else 24.dp, spec, label = "recent-pad")
     val titleAlpha by animateFloatAsState(
         if (selected) 1f else 0f,
         spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium),
@@ -269,13 +330,13 @@ private fun RecentCard(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(hueBrush(game.coverHue, portrait = !selected)),
+                .background(hueBrush(game.coverHue, portrait = !wide)),
             contentAlignment = Alignment.Center,
         ) {
             ArtworkLayer(
                 artwork,
-                landscape = selected,
-                preferIcon = true,
+                landscape = wide,
+                preferIcon = preferIcon,
                 modifier = Modifier.padding(iconPad),
             )
             Box(

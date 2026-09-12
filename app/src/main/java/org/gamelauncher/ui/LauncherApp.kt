@@ -34,7 +34,9 @@ import androidx.compose.ui.unit.dp
 import org.gamelauncher.MainActivity
 import org.gamelauncher.data.ArtworkRepository
 import org.gamelauncher.data.InstalledCatalog
+import org.gamelauncher.data.LauncherSettings
 import org.gamelauncher.data.LocalArtwork
+import org.gamelauncher.data.LocalSettings
 import org.gamelauncher.data.PlayNewsRepository
 import org.gamelauncher.data.findEntry
 import org.gamelauncher.ui.chrome.ApplySystemBarMode
@@ -65,6 +67,8 @@ fun LauncherApp(onClose: () -> Unit) {
         val snapshot = remember(context) { InstalledCatalog.load(context) }
         val newsRepo = remember(context) { PlayNewsRepository(context) }
         val artwork = remember(context) { ArtworkRepository(context, newsRepo) }
+        val settings = remember(context) { LauncherSettings(context) }
+        val prefs by settings.state.collectAsState()
         val news by newsRepo.news.collectAsState()
         val newsLoading by newsRepo.loading.collectAsState()
         LaunchedEffect(snapshot) { newsRepo.refresh(snapshot) }
@@ -104,16 +108,20 @@ fun LauncherApp(onClose: () -> Unit) {
         val activity = LocalContext.current as? MainActivity
         val onHomePressed = rememberUpdatedState {
             if (current is Screen.Home) {
-                searchOpen = false
-                searchQuery = ""
-                userMenuOpen = false
-                menuOpen = !menuOpen
+                if (prefs.winOpensMenu) {
+                    searchOpen = false
+                    searchQuery = ""
+                    userMenuOpen = false
+                    menuOpen = !menuOpen
+                }
             } else {
                 go(Screen.Home, root = true)
             }
         }
         val interceptKey = rememberUpdatedState { event: android.view.KeyEvent ->
-            if (!isAndroidMenuKey(event.keyCode) || current !is Screen.Home) return@rememberUpdatedState false
+            if (!prefs.winOpensMenu || !isAndroidMenuKey(event.keyCode) || current !is Screen.Home) {
+                return@rememberUpdatedState false
+            }
             if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                 searchOpen = false
                 searchQuery = ""
@@ -141,14 +149,17 @@ fun LauncherApp(onClose: () -> Unit) {
         val freeform = rememberFreeformWindow()
         ApplySystemBarMode(freeform)
 
-        CompositionLocalProvider(LocalArtwork provides artwork) {
+        CompositionLocalProvider(
+            LocalArtwork provides artwork,
+            LocalSettings provides settings,
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Background)
                 .onPreviewKeyEvent { event ->
                     when {
-                        isLauncherMenuKey(event) && current is Screen.Home -> {
+                        isLauncherMenuKey(event) && current is Screen.Home && prefs.winOpensMenu -> {
                             if (event.type == KeyEventType.KeyDown) {
                                 searchOpen = false
                                 searchQuery = ""
@@ -157,7 +168,7 @@ fun LauncherApp(onClose: () -> Unit) {
                             }
                             true
                         }
-                        isLauncherBackKey(event, typing = searchOpen) -> {
+                        isLauncherBackKey(event, typing = searchOpen, esc = prefs.escAsBack, b = prefs.bAsBack) -> {
                             if (event.type == KeyEventType.KeyUp) back()
                             true
                         }
@@ -275,11 +286,17 @@ private fun isLauncherMenuKey(event: KeyEvent): Boolean =
         event.key == Key.Window ||
         event.key == Key.Menu
 
-private fun isLauncherBackKey(event: KeyEvent, typing: Boolean): Boolean {
+private fun isLauncherBackKey(
+    event: KeyEvent,
+    typing: Boolean,
+    esc: Boolean,
+    b: Boolean,
+): Boolean {
     if (event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) return false
     return when (event.key) {
-        Key.Escape, Key.ButtonB -> true
-        Key.B -> !typing
+        Key.Escape -> esc
+        Key.ButtonB -> b
+        Key.B -> b && !typing
         else -> false
     }
 }
