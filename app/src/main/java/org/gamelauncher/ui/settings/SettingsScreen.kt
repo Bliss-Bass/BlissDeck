@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,8 +31,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -79,6 +83,7 @@ import org.gamelauncher.ui.theme.StopRed
 import org.gamelauncher.ui.theme.TextMuted
 import org.gamelauncher.ui.theme.TextPrimary
 import org.gamelauncher.ui.theme.Tile
+import org.gamelauncher.ui.theme.TileBorder
 import org.gamelauncher.ui.theme.chromeContentPadding
 import org.gamelauncher.ui.theme.label
 
@@ -366,16 +371,41 @@ fun SettingsScreen() {
                 }
             }
             Spacer(Modifier.height(14.dp))
+            val cornerRadius = theme.borders.radius.value.toInt()
+            val cornerPreset = cornerPresetFor(cornerRadius)
             ChoiceRow(
                 "Corners",
-                listOf(2 to "Sharp", 6 to "Regular", 12 to "Round"),
-                theme.borders.radius.value.toInt().let { n ->
-                    listOf(2, 6, 12).minBy { kotlin.math.abs(it - n) }
-                },
+                listOf(CornerSharp to "Sharp", CornerRegular to "Regular", CornerRoundMin to "Round"),
+                cornerPreset,
             ) { value ->
-                themeStore.patchCustom { pack ->
-                    pack.copy(borders = pack.borders.copy(radius = value.dp))
+                val next = if (value == CornerRoundMin && cornerRadius >= CornerRoundMin) {
+                    cornerRadius
+                } else {
+                    value
                 }
+                themeStore.patchCustom { pack ->
+                    pack.copy(borders = pack.borders.copy(radius = next.dp))
+                }
+            }
+            if (cornerPreset == CornerRoundMin) {
+                Spacer(Modifier.height(10.dp))
+                SettingSlider(
+                    label = "Round amount",
+                    value = cornerRadius.coerceIn(CornerRoundMin, CornerRoundMax),
+                    min = CornerRoundMin,
+                    max = CornerRoundMax,
+                    valueLabel = { "${it} dp" },
+                ) { next ->
+                    themeStore.patchCustom { pack ->
+                        pack.copy(borders = pack.borders.copy(radius = next.dp))
+                    }
+                }
+                Text(
+                    "12 dp is the Round preset. Drag higher to soften tiles past Regular and Round.",
+                    color = TextMuted,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
             }
             Spacer(Modifier.height(14.dp))
             ChoiceRow(
@@ -729,6 +759,69 @@ private fun <T> ChoiceRow(
             SteamPill(title, selected == value) { onSelect(value) }
         }
     }
+}
+
+private const val CornerSharp = 2
+private const val CornerRegular = 6
+private const val CornerRoundMin = 12
+private const val CornerRoundMax = 40
+
+private fun cornerPresetFor(radius: Int): Int = when {
+    radius >= CornerRoundMin -> CornerRoundMin
+    radius >= 4 -> CornerRegular
+    else -> CornerSharp
+}
+
+@Composable
+private fun SettingSlider(
+    label: String,
+    value: Int,
+    min: Int,
+    max: Int,
+    valueLabel: (Int) -> String = { it.toString() },
+    onChange: (Int) -> Unit,
+) {
+    var sliding by remember { mutableStateOf(value) }
+    var dragging by remember { mutableStateOf(false) }
+    SideEffect {
+        if (!dragging) sliding = value
+    }
+    val shape = RoundedCornerShape(sliding.dp)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(shape)
+                .background(Tile)
+                .border(2.dp, PlayGreen, shape),
+        )
+        Spacer(Modifier.size(10.dp))
+        Text(label, color = TextMuted, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        Text(valueLabel(sliding), color = TextPrimary, fontSize = 13.sp)
+    }
+    Slider(
+        value = sliding.toFloat(),
+        onValueChange = {
+            dragging = true
+            sliding = it.toInt().coerceIn(min, max)
+        },
+        onValueChangeFinished = {
+            dragging = false
+            onChange(sliding.coerceIn(min, max))
+        },
+        valueRange = min.toFloat()..max.toFloat(),
+        steps = (max - min - 1).coerceAtLeast(0),
+        colors = SliderDefaults.colors(
+            thumbColor = PlayGreen,
+            activeTrackColor = PlayGreen,
+            inactiveTrackColor = TileBorder.copy(alpha = 0.35f),
+            activeTickColor = Color.Transparent,
+            inactiveTickColor = Color.Transparent,
+        ),
+    )
 }
 
 @Composable

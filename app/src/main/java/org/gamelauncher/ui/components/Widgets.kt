@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
@@ -90,7 +91,7 @@ private val RoundedCardRadius = 16.dp
 fun cardRadius(): Dp {
     val rounded = LocalSettings.current.state.collectAsState().value.roundedCards
     val themeRadius = LocalTheme.current.borders.radius
-    return if (rounded) RoundedCardRadius else themeRadius
+    return if (rounded) max(themeRadius, RoundedCardRadius) else themeRadius
 }
 
 @Composable
