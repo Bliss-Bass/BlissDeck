@@ -11,11 +11,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -536,131 +534,182 @@ private fun WhatsNewTimeline(
     snapshot: LibrarySnapshot,
     onOpenGame: (String) -> Unit,
 ) {
-    val rows = news.mapNotNull { item ->
+    var selectedNews by remember { mutableStateOf<String?>(null) }
+    val cards = news.mapNotNull { item ->
         snapshot.findEntry(item.gameId)?.let { item to it }
     }
-    if (rows.isEmpty()) {
+    if (cards.isEmpty()) {
         EmptyCenter("No news yet")
         return
     }
-    Column {
-        rows.forEachIndexed { index, (item, game) ->
-            TimelineRow(
-                item = item,
-                game = game,
-                last = index == rows.lastIndex,
-            ) { onOpenGame(item.gameId) }
+    val gap = 16.dp
+    val cardWidth = 360.dp
+    LazyRow {
+        itemsIndexed(cards, key = { _, pair -> pair.first.id }) { index, (item, game) ->
+            val kindColor = if (item.kind.contains("BUG", ignoreCase = true)) NewsBugfix else NewsUpdate
+            Column(Modifier.width(if (index == cards.lastIndex) cardWidth else cardWidth + gap)) {
+                TimelineTick(
+                    date = item.date,
+                    color = kindColor,
+                    first = index == 0,
+                    last = index == cards.lastIndex,
+                )
+                NewsCard(
+                    item,
+                    game,
+                    selected = item.id == selectedNews,
+                    onFocused = { selectedNews = item.id },
+                    modifier = Modifier.width(cardWidth),
+                ) { onOpenGame(item.gameId) }
+            }
         }
     }
 }
 
 @Composable
-private fun TimelineRow(
+private fun TimelineTick(
+    date: String,
+    color: Color,
+    first: Boolean,
+    last: Boolean,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp),
+    ) {
+        Text(
+            date.ifBlank { "Recent" },
+            color = TextMuted,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(6.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(14.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            when {
+                first && last -> Unit
+                last -> Box(
+                    modifier = Modifier
+                        .width(5.dp)
+                        .height(2.dp)
+                        .background(TextMuted.copy(alpha = 0.35f)),
+                )
+                first -> Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .padding(start = 5.dp)
+                        .background(TextMuted.copy(alpha = 0.35f)),
+                )
+                else -> Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .background(TextMuted.copy(alpha = 0.35f)),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(color),
+            )
+        }
+    }
+}
+
+@Composable
+private fun NewsCard(
     item: NewsItem,
     game: Game,
-    last: Boolean,
+    selected: Boolean,
+    onFocused: () -> Unit,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val artwork = rememberArtwork(game.packageName, game.title, game.inLibrary)
     val headerUrl = artwork.imageUrl(landscape = true) ?: item.imageUrl
     val kindColor = if (item.kind.contains("BUG", ignoreCase = true)) NewsBugfix else NewsUpdate
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min)
-            .tileClick(onClick)
-            .padding(bottom = if (last) 0.dp else 4.dp),
+    val shape = RoundedCornerShape(4.dp)
+    Column(
+        modifier = modifier
+            .tileFrame(selected, shape, onFocused)
+            .background(Tile)
+            .tileClick(onClick),
     ) {
-        Column(
-            modifier = Modifier
-                .width(108.dp)
-                .padding(top = 4.dp, end = 10.dp),
-            horizontalAlignment = Alignment.End,
-        ) {
-            Text(
-                item.date.ifBlank { "Recent" },
-                color = TextMuted,
-                fontSize = 13.sp,
-                maxLines = 2,
-            )
-        }
         Box(
             modifier = Modifier
-                .width(18.dp)
-                .fillMaxHeight(),
-            contentAlignment = Alignment.TopCenter,
+                .fillMaxWidth()
+                .height(118.dp)
+                .background(hueBrush(game.coverHue, portrait = false)),
         ) {
-            if (!last) {
+            if (headerUrl != null) {
+                AsyncImage(
+                    model = headerUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                ArtworkLayer(artwork, landscape = true)
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Black.copy(alpha = 0.15f), Color.Black.copy(alpha = 0.72f)),
+                        ),
+                    ),
+            )
+            Text(
+                item.kind,
+                color = kindColor,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(12.dp),
+            )
+            if (item.body.isNotBlank()) {
+                Text(
+                    item.body,
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(12.dp),
+                )
+            }
+        }
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(
+                item.version,
+                color = TextPrimary,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .padding(top = 14.dp)
-                        .width(2.dp)
-                        .fillMaxHeight()
-                        .background(Tile),
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .padding(top = 8.dp)
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(kindColor),
-            )
-        }
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 12.dp, bottom = 16.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(Tile)
-                .padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(108.dp)
-                    .height(60.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(hueBrush(game.coverHue, portrait = false)),
-            ) {
-                if (headerUrl != null) {
-                    AsyncImage(
-                        model = headerUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    ArtworkLayer(artwork, landscape = true)
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(hueBrush(game.coverHue)),
+                ) {
+                    ArtworkLayer(artwork, landscape = false, preferIcon = true)
                 }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    item.kind,
-                    color = kindColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                )
-                Text(
-                    item.version,
-                    color = TextPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (item.body.isNotBlank()) {
-                    Text(
-                        item.body,
-                        color = TextMuted,
-                        fontSize = 13.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Text(item.gameTitle, color = TextPrimary, fontSize = 13.sp)
+                Spacer(Modifier.width(8.dp))
+                Text(item.gameTitle, color = TextPrimary, fontSize = 14.sp)
             }
         }
     }
