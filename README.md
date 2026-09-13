@@ -2,7 +2,7 @@
 
 A landscape Steam-library **HOME** for Android-x86, Bliss OS, PrimeOS, and Waydroid. It lists installed Android games and apps, launches them, and can pull covers from [SteamGridDB](https://www.steamgriddb.com/).
 
-The user-facing name is **BlissDeck**. The Android application ID is still `org.gamelauncher` (`0.1.0-dev`). Layouts follow [Vapor Launcher](https://github.com/imperador/vapor-launcher); this is a greenfield Kotlin / Jetpack Compose app, not a Qt port and not a ROM frontend.
+The user-facing name is **BlissDeck**. The Android application ID is still `org.gamelauncher` (`0.1.0-dev`). Public source lives at [Bliss-Bass/BlissDeck](https://github.com/Bliss-Bass/BlissDeck). Layouts follow [Vapor Launcher](https://github.com/imperador/vapor-launcher); this is a greenfield Kotlin / Jetpack Compose app, not a Qt port and not a ROM frontend.
 
 ## What’s in
 
@@ -19,6 +19,26 @@ The user-facing name is **BlissDeck**. The Android application ID is still `org.
 Desktop windowing keeps chrome below the freeform caption; fullscreen hides the status bar and nav/dock.
 
 Gamepad focus is still catching up (A/B/Y in the footer are mostly hints; system Back and the on-screen B control pop the stack). Friends is not built yet.
+
+## Releases
+
+Signed APKs ship from GitHub Releases when a `v*` tag is pushed (for example `v0.1.0`). Debug APKs are built on every push to `main`.
+
+1. Download **`app-release.apk`** from [Releases](https://github.com/Bliss-Bass/BlissDeck/releases).
+2. Install with `adb install -r app-release.apk`, then MENU → **Set as Home app**.
+
+[Obtainium](https://github.com/ImranR98/Obtainium) can track this repo: source GitHub, repository `Bliss-Bass/BlissDeck`, APK filter `app-release.apk`.
+
+CI matches the other Bass Android apps ([BumpDesk](https://github.com/electrikjesus/BumpDesk), [GameNative-x64](https://github.com/Bliss-Bass/GameNative-x64)):
+
+| Workflow | When |
+|----------|------|
+| **Verify Build** | push/PR to `main` — `assembleDebug` + unit tests |
+| **Compile Debug APK** | push to `main`, or run manually — uploads `app-debug.apk` |
+| **Compile Release APK** | manual — signed `app-release.apk` |
+| **Create Release** | `v*` tag — signed release + debug APKs and notes |
+
+Signed jobs need repository Actions secrets: `SIGNING_KEY` (base64 of the `.jks`), `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`. See `keystore.properties.example`.
 
 ## Build
 

@@ -1,0 +1,77 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build the release notes against'
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Decode signing keystore
+      env:
+        SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      run: bash .github/scripts/decode-signing-keystore.sh app/release.keystore
+
+    - name: Build APKs
+      env:
+        RELEASE_STORE_FILE: app/release.keystore
+        RELEASE_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+        RELEASE_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        RELEASE_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+      run: ./gradlew assembleDebug assembleRelease
+
+    - name: Verify release APK signature
+      run: |
+        APK=app/build/outputs/apk/release/app-release.apk
+        jarsigner -verify -verbose -certs "$APK" | tail -20
+        if jarsigner -verify -verbose -certs "$APK" | grep -qi "CN=Android Debug"; then
+          echo "::error::APK is debug-signed; check the SIGNING_* secrets"
+          exit 1
+        fi
+
+    - name: Generate release notes
+      run: |
+        TAG="${{ inputs.tag || github.ref_name }}"
+        bash .github/scripts/generate-release-notes.sh "$TAG" > release-notes.md
+        cat release-notes.md
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ inputs.tag || github.ref_name }}
+        files: |
+          app/build/outputs/apk/debug/app-debug.apk
+          app/build/outputs/apk/release/app-release.apk
+        body_path: release-notes.md
+        generate_release_notes: false
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Remove signing keystore
+      if: always()
+      run: rm -f app/release.keystore

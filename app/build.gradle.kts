@@ -1,7 +1,16 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
 android {
@@ -19,6 +28,29 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile")!!)
+                storePassword = keystoreProperties.getProperty("storePassword")
+                val placeholders = setOf("CHANGE_ME", "changeme", "")
+                check(!placeholders.contains(storePassword) && !placeholders.contains(keyPassword)) {
+                    "Update keystore.properties with the passwords from keytool (still using placeholder values)."
+                }
+            } else {
+                val storeFileEnv = System.getenv("RELEASE_STORE_FILE")
+                if (storeFileEnv != null) {
+                    storeFile = rootProject.file(storeFileEnv)
+                    storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                    keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                    keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+                }
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -26,6 +58,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            val releaseSigning = signingConfigs.getByName("release")
+            if (releaseSigning.storeFile?.isFile == true) {
+                signingConfig = releaseSigning
+            }
         }
     }
 
@@ -59,5 +95,6 @@ dependencies {
     implementation("dev.chrisbanes.haze:haze:1.3.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
+    testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

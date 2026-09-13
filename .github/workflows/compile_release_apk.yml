@@ -1,0 +1,55 @@
+name: Compile Release APK
+
+# Manual only. create_release.yml already builds and publishes a signed release APK on
+# every v* tag, so running this on tags would pay for the same build twice.
+on:
+  workflow_dispatch:
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Decode signing keystore
+      env:
+        SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      run: bash .github/scripts/decode-signing-keystore.sh app/release.keystore
+
+    - name: Build signed Release APK
+      env:
+        RELEASE_STORE_FILE: app/release.keystore
+        RELEASE_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+        RELEASE_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        RELEASE_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+      run: ./gradlew assembleRelease
+
+    - name: Verify release APK signature
+      run: |
+        APK=app/build/outputs/apk/release/app-release.apk
+        jarsigner -verify -verbose -certs "$APK" | tail -20
+        if jarsigner -verify -verbose -certs "$APK" | grep -qi "CN=Android Debug"; then
+          echo "::error::APK is debug-signed; check the SIGNING_* secrets"
+          exit 1
+        fi
+
+    - name: Upload Release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: BlissDeck-Release
+        path: app/build/outputs/apk/release/app-release.apk
+        if-no-files-found: error
+
+    - name: Remove signing keystore
+      if: always()
+      run: rm -f app/release.keystore
