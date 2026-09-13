@@ -86,6 +86,7 @@ data class ThemeLayouts(
     val homePlayNow: Boolean = true,
     val homeFeed: Boolean = true,
     val libraryCollections: Boolean = true,
+    val libraryMedia: Boolean = true,
     val gameActivity: Boolean = true,
     val gameCommunity: Boolean = true,
     val gameInfo: Boolean = true,
@@ -245,6 +246,7 @@ internal fun ThemePack.Companion.fromIni(
             homePlayNow = home.bool("play_now", fallback.layouts.homePlayNow),
             homeFeed = home.bool("feed", fallback.layouts.homeFeed),
             libraryCollections = library.bool("collections", fallback.layouts.libraryCollections),
+            libraryMedia = library.bool("media", fallback.layouts.libraryMedia),
             gameActivity = game.bool("activity", fallback.layouts.gameActivity),
             gameCommunity = game.bool("community", fallback.layouts.gameCommunity),
             gameInfo = game.bool("info", fallback.layouts.gameInfo),
@@ -314,6 +316,7 @@ fun ThemePack.toIni(): String = buildString {
     }
     section("library") {
         kv("collections", layouts.libraryCollections.toString())
+        kv("media", layouts.libraryMedia.toString())
     }
     section("game") {
         kv("activity", layouts.gameActivity.toString())

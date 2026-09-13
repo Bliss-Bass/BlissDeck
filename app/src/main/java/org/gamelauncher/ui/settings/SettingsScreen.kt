@@ -501,6 +501,11 @@ fun SettingsScreen() {
             }
             Spacer(Modifier.height(10.dp))
             Text("Library", color = TextPrimary, fontSize = 15.sp)
+            SettingToggle("Media tab", theme.layouts.libraryMedia) {
+                themeStore.patchCustom { pack ->
+                    pack.copy(layouts = pack.layouts.copy(libraryMedia = !pack.layouts.libraryMedia))
+                }
+            }
             SettingToggle("Collections tab", theme.layouts.libraryCollections) {
                 themeStore.patchCustom { pack ->
                     pack.copy(layouts = pack.layouts.copy(libraryCollections = !pack.layouts.libraryCollections))

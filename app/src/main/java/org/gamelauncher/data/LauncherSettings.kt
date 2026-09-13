@@ -64,6 +64,7 @@ data class LauncherPrefs(
     val homeShelf: HomeShelfTab = HomeShelfTab.LastPlayed,
     val homeRecentsId: String = "",
     val homeMediaId: String = "",
+    val libraryTab: LibraryTab = LibraryTab.AllGames,
 )
 
 data class RecentsMetrics(
@@ -124,6 +125,7 @@ class LauncherSettings(context: Context) {
         homeShelf = enumValue(prefs.getString(KEY_HOME_SHELF, null), HomeShelfTab.LastPlayed),
         homeRecentsId = prefs.getString(KEY_HOME_RECENTS_ID, "").orEmpty(),
         homeMediaId = prefs.getString(KEY_HOME_MEDIA_ID, "").orEmpty(),
+        libraryTab = enumValue(prefs.getString(KEY_LIBRARY_TAB, null), LibraryTab.AllGames),
     )
 
     private fun write(value: LauncherPrefs) {
@@ -153,6 +155,7 @@ class LauncherSettings(context: Context) {
             .putString(KEY_HOME_SHELF, value.homeShelf.name)
             .putString(KEY_HOME_RECENTS_ID, value.homeRecentsId)
             .putString(KEY_HOME_MEDIA_ID, value.homeMediaId)
+            .putString(KEY_LIBRARY_TAB, value.libraryTab.name)
             .apply()
     }
 
@@ -182,6 +185,7 @@ class LauncherSettings(context: Context) {
         const val KEY_HOME_SHELF = "home_shelf"
         const val KEY_HOME_RECENTS_ID = "home_recents_id"
         const val KEY_HOME_MEDIA_ID = "home_media_id"
+        const val KEY_LIBRARY_TAB = "library_tab"
     }
 }
 
