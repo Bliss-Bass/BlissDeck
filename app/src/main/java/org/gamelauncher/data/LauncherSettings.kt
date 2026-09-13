@@ -61,6 +61,7 @@ data class LauncherPrefs(
     val onboardingComplete: Boolean = false,
     val windowing: WindowingMode = WindowingMode.Auto,
     val launchIntent: LaunchIntentKind = LaunchIntentKind.Auto,
+    val homeShelf: HomeShelfTab = HomeShelfTab.LastPlayed,
 )
 
 data class RecentsMetrics(
@@ -118,6 +119,7 @@ class LauncherSettings(context: Context) {
         onboardingComplete = prefs.getBoolean(KEY_ONBOARDING, false),
         windowing = enumValue(prefs.getString(KEY_WINDOWING, null), WindowingMode.Auto),
         launchIntent = enumValue(prefs.getString(KEY_LAUNCH_INTENT, null), LaunchIntentKind.Auto),
+        homeShelf = enumValue(prefs.getString(KEY_HOME_SHELF, null), HomeShelfTab.LastPlayed),
     )
 
     private fun write(value: LauncherPrefs) {
@@ -144,6 +146,7 @@ class LauncherSettings(context: Context) {
             .putBoolean(KEY_ONBOARDING, value.onboardingComplete)
             .putString(KEY_WINDOWING, value.windowing.name)
             .putString(KEY_LAUNCH_INTENT, value.launchIntent.name)
+            .putString(KEY_HOME_SHELF, value.homeShelf.name)
             .apply()
     }
 
@@ -170,6 +173,7 @@ class LauncherSettings(context: Context) {
         const val KEY_ONBOARDING = "onboarding_complete"
         const val KEY_WINDOWING = "windowing"
         const val KEY_LAUNCH_INTENT = "launch_intent"
+        const val KEY_HOME_SHELF = "home_shelf"
     }
 }
 

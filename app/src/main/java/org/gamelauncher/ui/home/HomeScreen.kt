@@ -127,6 +127,8 @@ fun HomeScreen(
             .map { it.toGame() }
     }
     val layouts = LocalTheme.current.layouts
+    val settings = LocalSettings.current
+    val prefs by settings.state.collectAsState()
     val shelfTabs = remember(layouts.homeLastPlayed, layouts.homeMedia) {
         buildList {
             if (layouts.homeLastPlayed) add(HomeShelfTab.LastPlayed)
@@ -141,9 +143,12 @@ fun HomeScreen(
     }
     var selectedRecentsId by remember { mutableStateOf(recents.firstOrNull()?.id.orEmpty()) }
     var selectedMediaId by remember { mutableStateOf(media.firstOrNull()?.id.orEmpty()) }
-    var shelf by remember { mutableStateOf(shelfTabs.firstOrNull() ?: HomeShelfTab.LastPlayed) }
-    LaunchedEffect(shelfTabs) {
-        if (shelf !in shelfTabs) shelf = shelfTabs.firstOrNull() ?: HomeShelfTab.LastPlayed
+    val shelf = prefs.homeShelf.takeIf { it in shelfTabs }
+        ?: shelfTabs.firstOrNull()
+        ?: HomeShelfTab.LastPlayed
+    LaunchedEffect(shelfTabs, prefs.homeShelf) {
+        if (shelfTabs.isEmpty() || prefs.homeShelf == shelf) return@LaunchedEffect
+        settings.update { it.copy(homeShelf = shelf) }
     }
     var feed by remember { mutableStateOf(HomeFeedTab.WhatsNew) }
     val shelfItems = if (shelf == HomeShelfTab.Media) media else recents
@@ -154,8 +159,6 @@ fun HomeScreen(
         ?: media.firstOrNull()
         ?: snapshot.installed.first().toGame()
     val selectedArt = rememberArtwork(selected.packageName, selected.title, selected.inLibrary)
-    val settings = LocalSettings.current
-    val prefs by settings.state.collectAsState()
 
     Box(Modifier.fillMaxSize()) {
         if (prefs.ambientBackdrop) AmbientBackdrop(selectedArt)
@@ -167,7 +170,9 @@ fun HomeScreen(
         ) {
         if (shelfTabs.isNotEmpty()) {
             if (shelfTabs.size > 1) {
-                ShelfTabs(shelf, shelfTabs) { shelf = it }
+                ShelfTabs(shelf, shelfTabs) { tab ->
+                    settings.update { it.copy(homeShelf = tab) }
+                }
             } else {
                 Text(
                     if (shelf == HomeShelfTab.Media) "Media" else "Last played",

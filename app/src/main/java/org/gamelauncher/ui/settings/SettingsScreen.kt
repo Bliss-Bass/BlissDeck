@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.gamelauncher.data.ArtworkBackdrop
+import org.gamelauncher.data.HomeShelfTab
 import org.gamelauncher.data.ArtworkCoverStyle
 import org.gamelauncher.data.ArtworkIconSource
 import org.gamelauncher.data.LaunchIntentKind
@@ -477,6 +478,17 @@ fun SettingsScreen() {
                 fontSize = 13.sp,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
+            if (theme.layouts.homeLastPlayed && theme.layouts.homeMedia) {
+                ChoiceRow(
+                    "Open Home on",
+                    listOf(
+                        HomeShelfTab.LastPlayed to "Last played",
+                        HomeShelfTab.Media to "Media",
+                    ),
+                    prefs.homeShelf,
+                ) { settings.update { p -> p.copy(homeShelf = it) } }
+                Spacer(Modifier.height(10.dp))
+            }
             SettingToggle("Play now", theme.layouts.homePlayNow) {
                 themeStore.patchCustom { pack ->
                     pack.copy(layouts = pack.layouts.copy(homePlayNow = !pack.layouts.homePlayNow))
