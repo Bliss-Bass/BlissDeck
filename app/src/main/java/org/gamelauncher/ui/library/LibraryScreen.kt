@@ -92,18 +92,18 @@ fun LibraryScreen(
                 select(visibleTabs[(i - 1 + visibleTabs.size) % visibleTabs.size])
             }
             Spacer(Modifier.weight(1f))
-            SteamPill("All Games", tab == LibraryTab.AllGames, count = snapshot.libraryGames.size) {
+            SteamPill("Games", tab == LibraryTab.AllGames, count = snapshot.libraryGames.size) {
                 select(LibraryTab.AllGames)
-            }
-            Spacer(Modifier.width(28.dp))
-            SteamPill("Installed", tab == LibraryTab.Installed, count = snapshot.installed.size) {
-                select(LibraryTab.Installed)
             }
             if (layouts.libraryMedia) {
                 Spacer(Modifier.width(28.dp))
                 SteamPill("Media", tab == LibraryTab.Media, count = media.size) {
                     select(LibraryTab.Media)
                 }
+            }
+            Spacer(Modifier.width(28.dp))
+            SteamPill("Installed", tab == LibraryTab.Installed, count = snapshot.installed.size) {
+                select(LibraryTab.Installed)
             }
             if (layouts.libraryCollections) {
                 Spacer(Modifier.width(28.dp))
