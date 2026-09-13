@@ -104,6 +104,7 @@ fun LauncherApp(onClose: () -> Unit) {
         val collections = remember(context) { CollectionsStore(context) }
         val details = remember(context) { TitleDetailsRepository(context, newsRepo) }
         val news by newsRepo.news.collectAsState()
+        val mediaNews by newsRepo.mediaNews.collectAsState()
         val newsLoading by newsRepo.loading.collectAsState()
         var stack by remember { mutableStateOf(listOf<Screen>(Screen.Home)) }
         var menuOpen by remember { mutableStateOf(false) }
@@ -116,7 +117,7 @@ fun LauncherApp(onClose: () -> Unit) {
         var fallbackRunning by remember { mutableStateOf(emptyList<RunningApp>()) }
         val current = stack.last()
         LaunchedEffect(snapshot, prefs.whatsNewCount) { newsRepo.refresh(snapshot, prefs.whatsNewCount) }
-        LaunchedEffect(news) { artwork.onPlayArtUpdated() }
+        LaunchedEffect(news, mediaNews) { artwork.onPlayArtUpdated() }
         LaunchedEffect(showOnboarding) {
             if (!showOnboarding) return@LaunchedEffect
             menuOpen = false
@@ -260,6 +261,7 @@ fun LauncherApp(onClose: () -> Unit) {
                         Screen.Home -> HomeScreen(
                             snapshot,
                             news = news,
+                            mediaNews = mediaNews,
                             newsLoading = newsLoading,
                             onOpenGame = { go(Screen.Game(it)) },
                         )

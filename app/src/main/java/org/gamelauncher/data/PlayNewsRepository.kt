@@ -21,9 +21,11 @@ class PlayNewsRepository(context: Context) {
     private val cacheDir = File(appContext.cacheDir, "playnews").also { it.mkdirs() }
     private val steamDir = File(appContext.cacheDir, "steamnews").also { it.mkdirs() }
     private val _news = MutableStateFlow<List<NewsItem>>(emptyList())
+    private val _mediaNews = MutableStateFlow<List<NewsItem>>(emptyList())
     private val _loading = MutableStateFlow(false)
 
     val news: StateFlow<List<NewsItem>> = _news
+    val mediaNews: StateFlow<List<NewsItem>> = _mediaNews
     val loading: StateFlow<Boolean> = _loading
 
     suspend fun refresh(snapshot: LibrarySnapshot, limit: Int = 16) = withContext(Dispatchers.IO) {
@@ -31,11 +33,14 @@ class PlayNewsRepository(context: Context) {
         try {
             val cap = limit.coerceIn(8, 32)
             val cached = assemble(snapshot, readCached(snapshot), readSteamCached(snapshot), cap)
-            if (cached.isNotEmpty()) _news.value = cached
+            if (cached.games.isNotEmpty()) _news.value = cached.games
+            if (cached.media.isNotEmpty()) _mediaNews.value = cached.media
 
             val fetched = fetchStale(snapshot)
             val steamNews = fetchSteamStale(snapshot)
-            _news.value = assemble(snapshot, fetched, steamNews, cap)
+            val assembled = assemble(snapshot, fetched, steamNews, cap)
+            _news.value = assembled.games
+            _mediaNews.value = assembled.media
         } finally {
             _loading.value = false
         }
@@ -94,7 +99,7 @@ class PlayNewsRepository(context: Context) {
         listings: Map<String, CachedListing>,
         steamNews: Map<String, List<SteamNewsHit>>,
         limit: Int,
-    ): List<NewsItem> {
+    ): AssembledNews {
         val now = System.currentTimeMillis()
         val games = snapshot.installed.filter { it.isGame }.map { it.id }.toSet()
         val playItems = snapshot.installed.flatMap { app ->
@@ -103,14 +108,25 @@ class PlayNewsRepository(context: Context) {
             if (!include(app, listing, now)) return@flatMap emptyList()
             listing.toNewsItems(app)
         }
+        val mediaItems = snapshot.installed.flatMap { app ->
+            val listing = listings[app.packageName] ?: return@flatMap emptyList()
+            if (listing.missing) return@flatMap emptyList()
+            if (!includeMedia(app, listing)) return@flatMap emptyList()
+            listing.toNewsItems(app)
+        }
         val steamItems = snapshot.installed.flatMap { app ->
             val hits = steamNews[app.packageName].orEmpty()
             hits.map { it.toNews(app) }
         }
-        return (playItems + steamItems).sortedWith(
+        val gameNews = (playItems + steamItems).sortedWith(
             compareByDescending<NewsItem> { it.gameId in games }
                 .thenByDescending { it.sortMillis },
         ).distinctBy { it.id }.take(limit)
+        val mediaNews = mediaItems
+            .sortedByDescending { it.sortMillis }
+            .distinctBy { it.id }
+            .take(limit)
+        return AssembledNews(gameNews, mediaNews)
     }
 
     private fun include(app: InstalledApp, listing: CachedListing, now: Long): Boolean {
@@ -124,6 +140,12 @@ class PlayNewsRepository(context: Context) {
         return now - updated <= OTHER_APP_WINDOW_MS
     }
 
+    private fun includeMedia(app: InstalledApp, listing: CachedListing): Boolean {
+        if (!app.isMedia) return false
+        if (isPlaySkipped(app.packageName)) return false
+        return !listing.whatsNew.isNullOrBlank() || !listing.version.isNullOrBlank()
+    }
+
     private fun looksLikeGame(app: InstalledApp, listing: CachedListing): Boolean {
         val blob = "${app.packageName} ${app.title} ${listing.title.orEmpty()}".lowercase()
         return "game" in blob || "steam" in blob || "emulat" in blob
@@ -131,11 +153,12 @@ class PlayNewsRepository(context: Context) {
 
     private fun fetchTargets(snapshot: LibrarySnapshot): List<InstalledApp> {
         val games = snapshot.installed.filter { it.isGame && !isPlaySkipped(it.packageName) }
+        val media = snapshot.installed.filter { it.isMedia && !isPlaySkipped(it.packageName) }
         val others = snapshot.installed
-            .filter { !it.isGame && !isPlaySkipped(it.packageName) }
+            .filter { !it.isGame && !it.isMedia && !isPlaySkipped(it.packageName) }
             .sortedByDescending { it.lastUpdateTime }
             .take(24)
-        return (games + others).distinctBy { it.packageName }
+        return (games + media + others).distinctBy { it.packageName }
     }
 
     private fun readCached(snapshot: LibrarySnapshot): Map<String, CachedListing> {
@@ -442,7 +465,13 @@ private fun SteamNewsHit.toNews(app: InstalledApp): NewsItem {
     )
 }
 
+private data class AssembledNews(
+    val games: List<NewsItem>,
+    val media: List<NewsItem>,
+)
+
 internal fun isPlaySkipped(packageName: String): Boolean {
+    if (MediaApps.isKnown(packageName)) return false
     return packageName.startsWith("com.android.") ||
         packageName.startsWith("com.google.android.") ||
         packageName.startsWith("org.lineageos.") ||

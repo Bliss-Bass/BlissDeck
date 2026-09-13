@@ -529,6 +529,12 @@ fun SettingsScreen() {
                 listOf(8 to "8", 16 to "16", 32 to "32"),
                 prefs.whatsNewCount,
             ) { settings.update { p -> p.copy(whatsNewCount = it) } }
+            Text(
+                "Last played uses game and Steam notes. Media uses Play Store notes from video apps.",
+                color = TextMuted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 8.dp),
+            )
         }
 
         SettingsCard("Recents") {

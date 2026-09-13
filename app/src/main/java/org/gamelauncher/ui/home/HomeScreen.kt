@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -109,6 +110,7 @@ import org.gamelauncher.ui.theme.chromeContentPadding
 fun HomeScreen(
     snapshot: LibrarySnapshot,
     news: List<NewsItem>,
+    mediaNews: List<NewsItem>,
     newsLoading: Boolean,
     onOpenGame: (String) -> Unit,
 ) {
@@ -141,14 +143,46 @@ fun HomeScreen(
         }
         return
     }
-    var selectedRecentsId by remember { mutableStateOf(recents.firstOrNull()?.id.orEmpty()) }
-    var selectedMediaId by remember { mutableStateOf(media.firstOrNull()?.id.orEmpty()) }
+    var selectedRecentsId by remember {
+        mutableStateOf(
+            prefs.homeRecentsId.takeIf { id -> recents.any { it.id == id } }
+                ?: recents.firstOrNull()?.id.orEmpty(),
+        )
+    }
+    var selectedMediaId by remember {
+        mutableStateOf(
+            prefs.homeMediaId.takeIf { id -> media.any { it.id == id } }
+                ?: media.firstOrNull()?.id.orEmpty(),
+        )
+    }
     val shelf = prefs.homeShelf.takeIf { it in shelfTabs }
         ?: shelfTabs.firstOrNull()
         ?: HomeShelfTab.LastPlayed
     LaunchedEffect(shelfTabs, prefs.homeShelf) {
         if (shelfTabs.isEmpty() || prefs.homeShelf == shelf) return@LaunchedEffect
         settings.update { it.copy(homeShelf = shelf) }
+    }
+    LaunchedEffect(recents, selectedRecentsId) {
+        if (recents.isNotEmpty() && recents.none { it.id == selectedRecentsId }) {
+            selectedRecentsId = recents.first().id
+        }
+    }
+    LaunchedEffect(media, selectedMediaId) {
+        if (media.isNotEmpty() && media.none { it.id == selectedMediaId }) {
+            selectedMediaId = media.first().id
+        }
+    }
+    val persistRecentsId = rememberUpdatedState(selectedRecentsId)
+    val persistMediaId = rememberUpdatedState(selectedMediaId)
+    DisposableEffect(settings) {
+        onDispose {
+            settings.update {
+                it.copy(
+                    homeRecentsId = persistRecentsId.value,
+                    homeMediaId = persistMediaId.value,
+                )
+            }
+        }
     }
     var feed by remember { mutableStateOf(HomeFeedTab.WhatsNew) }
     val shelfItems = if (shelf == HomeShelfTab.Media) media else recents
@@ -223,24 +257,38 @@ fun HomeScreen(
         Spacer(Modifier.height(28.dp))
         FeedTabs(feed) { feed = it }
         Spacer(Modifier.height(16.dp))
+        val shelfNews = if (shelf == HomeShelfTab.Media) mediaNews else news
         when (feed) {
             HomeFeedTab.WhatsNew -> {
                 when {
-                    news.isNotEmpty() -> WhatsNewTimeline(news, snapshot, onOpenGame)
+                    shelfNews.isNotEmpty() -> WhatsNewTimeline(shelfNews, snapshot, onOpenGame)
                     newsLoading -> EmptyCenter("Checking Play Store…")
-                    else -> EmptyCenter("No news yet")
+                    else -> EmptyCenter(
+                        if (shelf == HomeShelfTab.Media) "No media updates yet" else "No news yet",
+                    )
                 }
             }
             HomeFeedTab.Favorites -> {
                 val favoriteIds = collections.firstOrNull { it.id == CollectionsStore.FAVORITES_ID }
                     ?.packageNames.orEmpty()
                 val games = favoriteIds.mapNotNull { snapshot.findEntry(it) }
+                    .filter { shelf != HomeShelfTab.Media || it.isMedia }
                 if (games.isEmpty()) {
-                    EmptyCenter("Add games to Favorites from a collection")
+                    EmptyCenter(
+                        if (shelf == HomeShelfTab.Media) {
+                            "Add media apps to Favorites from a collection"
+                        } else {
+                            "Add games to Favorites from a collection"
+                        },
+                    )
                 } else {
                     RecommendedRow(
                         title = "Favorites",
-                        subtitle = "Games you saved to your Favorites collection",
+                        subtitle = if (shelf == HomeShelfTab.Media) {
+                            "Media you saved to your Favorites collection"
+                        } else {
+                            "Games you saved to your Favorites collection"
+                        },
                         apps = games.map {
                             InstalledApp(it.id, it.title, it.packageName, it.coverHue, it.inLibrary)
                         },
@@ -249,17 +297,34 @@ fun HomeScreen(
                 }
             }
             HomeFeedTab.Recommended -> {
-                val games = snapshot.libraryGames
-                    .sortedBy { history.lastPlayedMillis(it.packageName) }
-                    .take(12)
-                RecommendedRow(
-                    title = "Play next",
-                    subtitle = "Games you have not opened lately",
-                    apps = games.map {
-                        InstalledApp(it.id, it.title, it.packageName, it.coverHue, true)
-                    },
-                    onOpenGame = onOpenGame,
-                )
+                if (shelf == HomeShelfTab.Media) {
+                    val apps = snapshot.installed
+                        .filter { it.isMedia }
+                        .sortedBy { history.lastPlayedMillis(it.packageName) }
+                        .take(12)
+                    if (apps.isEmpty()) {
+                        EmptyCenter("No media apps yet")
+                    } else {
+                        RecommendedRow(
+                            title = "Watch next",
+                            subtitle = "Media you have not opened lately",
+                            apps = apps,
+                            onOpenGame = onOpenGame,
+                        )
+                    }
+                } else {
+                    val games = snapshot.libraryGames
+                        .sortedBy { history.lastPlayedMillis(it.packageName) }
+                        .take(12)
+                    RecommendedRow(
+                        title = "Play next",
+                        subtitle = "Games you have not opened lately",
+                        apps = games.map {
+                            InstalledApp(it.id, it.title, it.packageName, it.coverHue, true)
+                        },
+                        onOpenGame = onOpenGame,
+                    )
+                }
             }
         }
         }

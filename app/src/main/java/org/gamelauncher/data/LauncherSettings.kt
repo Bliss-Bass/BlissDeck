@@ -62,6 +62,8 @@ data class LauncherPrefs(
     val windowing: WindowingMode = WindowingMode.Auto,
     val launchIntent: LaunchIntentKind = LaunchIntentKind.Auto,
     val homeShelf: HomeShelfTab = HomeShelfTab.LastPlayed,
+    val homeRecentsId: String = "",
+    val homeMediaId: String = "",
 )
 
 data class RecentsMetrics(
@@ -120,6 +122,8 @@ class LauncherSettings(context: Context) {
         windowing = enumValue(prefs.getString(KEY_WINDOWING, null), WindowingMode.Auto),
         launchIntent = enumValue(prefs.getString(KEY_LAUNCH_INTENT, null), LaunchIntentKind.Auto),
         homeShelf = enumValue(prefs.getString(KEY_HOME_SHELF, null), HomeShelfTab.LastPlayed),
+        homeRecentsId = prefs.getString(KEY_HOME_RECENTS_ID, "").orEmpty(),
+        homeMediaId = prefs.getString(KEY_HOME_MEDIA_ID, "").orEmpty(),
     )
 
     private fun write(value: LauncherPrefs) {
@@ -147,6 +151,8 @@ class LauncherSettings(context: Context) {
             .putString(KEY_WINDOWING, value.windowing.name)
             .putString(KEY_LAUNCH_INTENT, value.launchIntent.name)
             .putString(KEY_HOME_SHELF, value.homeShelf.name)
+            .putString(KEY_HOME_RECENTS_ID, value.homeRecentsId)
+            .putString(KEY_HOME_MEDIA_ID, value.homeMediaId)
             .apply()
     }
 
@@ -174,6 +180,8 @@ class LauncherSettings(context: Context) {
         const val KEY_WINDOWING = "windowing"
         const val KEY_LAUNCH_INTENT = "launch_intent"
         const val KEY_HOME_SHELF = "home_shelf"
+        const val KEY_HOME_RECENTS_ID = "home_recents_id"
+        const val KEY_HOME_MEDIA_ID = "home_media_id"
     }
 }
 
