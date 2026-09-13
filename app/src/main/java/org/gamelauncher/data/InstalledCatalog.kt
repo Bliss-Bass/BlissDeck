@@ -19,7 +19,8 @@ object InstalledCatalog {
 
         if (resolved.isEmpty()) return MockLibrary.snapshot
 
-        val installed = resolved.map { it.toInstalledApp(pm) }
+        val leanback = leanbackPackages(pm)
+        val installed = resolved.map { it.toInstalledApp(pm, leanback) }
         val games = installed.filter { it.isGame }.map { it.toGame() }
         return LibrarySnapshot(
             games = games,
@@ -52,15 +53,48 @@ fun InstalledApp.toGame(): Game = Game(
     summary = "Installed Android app.",
     developer = packageName,
     publisher = packageName,
-    category = if (isGame) "Games" else "Application",
+    category = when {
+        isGame -> "Games"
+        isMedia -> "Media"
+        else -> "Application"
+    },
     releaseDate = "—",
     players = "Single-Player",
     controller = "Unknown",
     coverHue = coverHue,
+    detectedGame = detectedGame,
+    hasLeanback = hasLeanback,
+    detectedMedia = detectedMedia,
+    isMedia = isMedia,
 )
 
 private fun launcherActivities(pm: PackageManager): List<ResolveInfo> {
-    val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+    return queryMain(pm, Intent.CATEGORY_LAUNCHER)
+}
+
+private fun leanbackPackages(pm: PackageManager): Set<String> {
+    return queryMain(pm, Intent.CATEGORY_LEANBACK_LAUNCHER)
+        .map { it.activityInfo.packageName }
+        .toSet()
+}
+
+internal fun leanbackActivity(pm: PackageManager, packageName: String): ResolveInfo? {
+    val intent = Intent(Intent.ACTION_MAIN)
+        .addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
+        .setPackage(packageName)
+    return if (Build.VERSION.SDK_INT >= 33) {
+        pm.queryIntentActivities(
+            intent,
+            PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong()),
+        ).firstOrNull()
+    } else {
+        @Suppress("DEPRECATION")
+        pm.queryIntentActivities(intent, PackageManager.MATCH_ALL).firstOrNull()
+    }
+}
+
+private fun queryMain(pm: PackageManager, category: String): List<ResolveInfo> {
+    val intent = Intent(Intent.ACTION_MAIN).addCategory(category)
     return if (Build.VERSION.SDK_INT >= 33) {
         pm.queryIntentActivities(
             intent,
@@ -72,19 +106,25 @@ private fun launcherActivities(pm: PackageManager): List<ResolveInfo> {
     }
 }
 
-private fun ResolveInfo.toInstalledApp(pm: PackageManager): InstalledApp {
+private fun ResolveInfo.toInstalledApp(pm: PackageManager, leanback: Set<String>): InstalledApp {
     val packageName = activityInfo.packageName
     val title = loadLabel(pm).toString()
     val appInfo = activityInfo.applicationInfo
     val pkgInfo = packageInfo(pm, packageName)
+    val detected = appInfo.isGameApp()
+    val media = MediaApps.detect(appInfo)
     return InstalledApp(
         id = packageName,
         title = title,
         packageName = packageName,
         coverHue = packageName.packageHue(),
-        isGame = appInfo.isGameApp(),
+        isGame = detected,
         lastUpdateTime = pkgInfo?.lastUpdateTime ?: 0L,
         versionName = pkgInfo?.versionName,
+        detectedGame = detected,
+        hasLeanback = packageName in leanback,
+        detectedMedia = media,
+        isMedia = media,
     )
 }
 

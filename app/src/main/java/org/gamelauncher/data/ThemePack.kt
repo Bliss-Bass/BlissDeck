@@ -82,6 +82,7 @@ data class ThemeIcons(
 
 data class ThemeLayouts(
     val homeLastPlayed: Boolean = true,
+    val homeMedia: Boolean = true,
     val homePlayNow: Boolean = true,
     val homeFeed: Boolean = true,
     val libraryCollections: Boolean = true,
@@ -240,6 +241,7 @@ internal fun ThemePack.Companion.fromIni(
         ),
         layouts = ThemeLayouts(
             homeLastPlayed = home.bool("last_played", fallback.layouts.homeLastPlayed),
+            homeMedia = home.bool("media", fallback.layouts.homeMedia),
             homePlayNow = home.bool("play_now", fallback.layouts.homePlayNow),
             homeFeed = home.bool("feed", fallback.layouts.homeFeed),
             libraryCollections = library.bool("collections", fallback.layouts.libraryCollections),
@@ -306,6 +308,7 @@ fun ThemePack.toIni(): String = buildString {
     }
     section("home") {
         kv("last_played", layouts.homeLastPlayed.toString())
+        kv("media", layouts.homeMedia.toString())
         kv("play_now", layouts.homePlayNow.toString())
         kv("feed", layouts.homeFeed.toString())
     }

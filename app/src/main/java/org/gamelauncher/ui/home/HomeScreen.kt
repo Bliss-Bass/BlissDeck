@@ -66,6 +66,7 @@ import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import org.gamelauncher.data.Game
 import org.gamelauncher.data.HomeFeedTab
+import org.gamelauncher.data.HomeShelfTab
 import org.gamelauncher.data.InstalledApp
 import org.gamelauncher.data.LauncherPrefs
 import org.gamelauncher.data.LibrarySnapshot
@@ -115,21 +116,44 @@ fun HomeScreen(
     val recents = remember(snapshot, historyEpoch) {
         snapshot.libraryGames
             .sortedByDescending { history.lastPlayedMillis(it.packageName) }
-            .ifEmpty { snapshot.installed.take(8).map { it.toGame() } }
+            .ifEmpty { snapshot.installed.filter { !it.isMedia }.take(8).map { it.toGame() } }
     }
-    if (recents.isEmpty()) {
+    val media = remember(snapshot, historyEpoch) {
+        snapshot.installed
+            .filter { it.isMedia }
+            .sortedByDescending { history.lastPlayedMillis(it.packageName) }
+            .map { it.toGame() }
+    }
+    val layouts = LocalTheme.current.layouts
+    val shelfTabs = remember(layouts.homeLastPlayed, layouts.homeMedia) {
+        buildList {
+            if (layouts.homeLastPlayed) add(HomeShelfTab.LastPlayed)
+            if (layouts.homeMedia) add(HomeShelfTab.Media)
+        }
+    }
+    if (recents.isEmpty() && media.isEmpty() && snapshot.installed.isEmpty()) {
         Box(Modifier.fillMaxSize().background(Background), contentAlignment = Alignment.Center) {
             Text("No installed apps found", color = TextMuted, fontSize = 16.sp)
         }
         return
     }
-    var selectedId by remember { mutableStateOf(recents.first().id) }
+    var selectedRecentsId by remember { mutableStateOf(recents.firstOrNull()?.id.orEmpty()) }
+    var selectedMediaId by remember { mutableStateOf(media.firstOrNull()?.id.orEmpty()) }
+    var shelf by remember { mutableStateOf(shelfTabs.firstOrNull() ?: HomeShelfTab.LastPlayed) }
+    LaunchedEffect(shelfTabs) {
+        if (shelf !in shelfTabs) shelf = shelfTabs.firstOrNull() ?: HomeShelfTab.LastPlayed
+    }
     var feed by remember { mutableStateOf(HomeFeedTab.WhatsNew) }
-    val selected = recents.firstOrNull { it.id == selectedId } ?: recents.first()
+    val shelfItems = if (shelf == HomeShelfTab.Media) media else recents
+    val selectedId = if (shelf == HomeShelfTab.Media) selectedMediaId else selectedRecentsId
+    val selected = shelfItems.firstOrNull { it.id == selectedId }
+        ?: shelfItems.firstOrNull()
+        ?: recents.firstOrNull()
+        ?: media.firstOrNull()
+        ?: snapshot.installed.first().toGame()
     val selectedArt = rememberArtwork(selected.packageName, selected.title, selected.inLibrary)
     val settings = LocalSettings.current
     val prefs by settings.state.collectAsState()
-    val layouts = LocalTheme.current.layouts
 
     Box(Modifier.fillMaxSize()) {
         if (prefs.ambientBackdrop) AmbientBackdrop(selectedArt)
@@ -139,18 +163,45 @@ fun HomeScreen(
                 .verticalScroll(rememberScrollState())
                 .chromeContentPadding(extraTop = 18.dp, extraBottom = 12.dp, horizontal = 28.dp),
         ) {
-        if (layouts.homeLastPlayed) {
-            Text("Last played", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+        if (shelfTabs.isNotEmpty()) {
+            if (shelfTabs.size > 1) {
+                ShelfTabs(shelf, shelfTabs) { shelf = it }
+            } else {
+                Text(
+                    if (shelf == HomeShelfTab.Media) "Media" else "Last played",
+                    color = TextPrimary,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
             Spacer(Modifier.height(14.dp))
-            RecentsRow(recents, selectedId, prefs, onSelect = { selectedId = it }, onOpenGame = onOpenGame)
+            if (shelfItems.isEmpty()) {
+                EmptyCenter(
+                    if (shelf == HomeShelfTab.Media) {
+                        "No media apps yet. Open a title and mark it as media from the sprocket."
+                    } else {
+                        "No recently played games"
+                    },
+                )
+            } else {
+                RecentsRow(
+                    recents = shelfItems,
+                    selectedId = selected.id,
+                    prefs = prefs,
+                    onSelect = { id ->
+                        if (shelf == HomeShelfTab.Media) selectedMediaId = id else selectedRecentsId = id
+                    },
+                    onOpenGame = onOpenGame,
+                )
+            }
         }
-        if (prefs.showSelectedTitle && layouts.homePlayNow) {
+        if (prefs.showSelectedTitle && layouts.homePlayNow && shelfItems.isNotEmpty()) {
             Spacer(Modifier.height(18.dp))
             Text(selected.title, color = TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null, tint = PlayGreen, modifier = Modifier.size(28.dp))
                 Text(
-                    "PLAY NOW!",
+                    if (shelf == HomeShelfTab.Media) "WATCH NOW!" else "PLAY NOW!",
                     color = PlayGreen,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
@@ -504,6 +555,26 @@ private fun RecentCard(
                     .padding(18.dp)
                     .graphicsLayer { alpha = amount },
             )
+        }
+    }
+}
+
+@Composable
+private fun ShelfTabs(
+    selected: HomeShelfTab,
+    tabs: List<HomeShelfTab>,
+    onSelect: (HomeShelfTab) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        tabs.forEachIndexed { index, tab ->
+            if (index > 0) Spacer(Modifier.width(28.dp))
+            SteamPill(
+                if (tab == HomeShelfTab.Media) "Media" else "Last played",
+                selected == tab,
+            ) { onSelect(tab) }
         }
     }
 }

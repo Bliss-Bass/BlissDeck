@@ -10,14 +10,18 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -25,11 +29,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -45,8 +52,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -54,7 +68,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import org.gamelauncher.data.ArtCandidate
@@ -65,14 +78,20 @@ import org.gamelauncher.data.AppRunState
 import org.gamelauncher.data.Game
 import org.gamelauncher.data.GamePageTab
 import org.gamelauncher.data.GameSession
-import kotlin.math.roundToInt
+import org.gamelauncher.data.LaunchIntentKind
 import org.gamelauncher.data.LocalArtwork
 import org.gamelauncher.data.LocalCollections
 import org.gamelauncher.data.LocalDetails
 import org.gamelauncher.data.LocalPlayHistory
+import org.gamelauncher.data.LocalSettings
 import org.gamelauncher.data.LocalTheme
+import org.gamelauncher.data.LocalTitles
 import org.gamelauncher.data.SteamNative
 import org.gamelauncher.data.TitleDetails
+import org.gamelauncher.data.TitleOverride
+import org.gamelauncher.data.UNITY_FORCE_GLES
+import org.gamelauncher.data.UNITY_FORCE_VULKAN
+import org.gamelauncher.data.WindowingMode
 import org.gamelauncher.ui.components.AmbientBackdrop
 import org.gamelauncher.ui.components.GameIcon
 import org.gamelauncher.ui.components.ArtworkLayer
@@ -87,11 +106,14 @@ import org.gamelauncher.ui.components.hueBrush
 import org.gamelauncher.ui.components.rememberArtwork
 import org.gamelauncher.ui.theme.Background
 import org.gamelauncher.ui.theme.Footer
+import org.gamelauncher.ui.theme.Menu
 import org.gamelauncher.ui.theme.PlayGreen
 import org.gamelauncher.ui.theme.StopRed
 import org.gamelauncher.ui.theme.TextMuted
 import org.gamelauncher.ui.theme.TextPrimary
 import org.gamelauncher.ui.theme.Tile
+import org.gamelauncher.ui.theme.frosted
+import kotlin.math.roundToInt
 
 @Composable
 fun GameScreen(game: Game) {
@@ -198,8 +220,14 @@ private fun GamePlayBar(
 ) {
     val context = LocalContext.current
     val history = LocalPlayHistory.current
+    val prefs by LocalSettings.current.state.collectAsState()
+    val titles = LocalTitles.current
+    val overrides by titles.state.collectAsState()
+    val title = overrides[game.packageName] ?: TitleOverride()
     val presence by AppPresence.snapshot.collectAsState()
     val mapperInstalled = remember { GameSession.hasXtMapper(context) }
+    var actionsOpen by remember { mutableStateOf(false) }
+    var launchEditorOpen by remember { mutableStateOf(false) }
     var amRunning by remember(game.packageName) { mutableStateOf(false) }
     LaunchedEffect(game.packageName, presence.connected) {
         if (presence.connected) return@LaunchedEffect
@@ -236,7 +264,7 @@ private fun GamePlayBar(
                 .clickable(enabled = runState != AppRunState.Closing) {
                     when (runState) {
                         AppRunState.Stopped -> {
-                            if (GameSession.launch(context, game.packageName)) {
+                            if (GameSession.launch(context, game.packageName, prefs, title)) {
                                 history.record(game.packageName)
                             }
                         }
@@ -293,13 +321,74 @@ private fun GamePlayBar(
             description = "Open XTMapper",
         )
         Spacer(Modifier.width(10.dp))
-        Glyph(
-            Icons.Default.Settings,
-            onClick = { GameSession.openAppInfo(context, game.packageName) },
-            description = "App info",
-        )
+        val density = LocalDensity.current
+        Box {
+            Glyph(
+                Icons.Default.Settings,
+                onClick = { actionsOpen = !actionsOpen },
+                filled = title.hasLaunchTweaks,
+                description = "Game options",
+            )
+            if (actionsOpen) {
+                Popup(
+                    alignment = Alignment.TopEnd,
+                    offset = IntOffset(0, with(density) { 56.dp.roundToPx() }),
+                    onDismissRequest = { actionsOpen = false },
+                    properties = PopupProperties(focusable = true),
+                ) {
+                    GameActionsMenu(
+                        game = game,
+                        override = title,
+                        onToggleGame = {
+                            val want = !game.inLibrary
+                            titles.update(game.packageName) {
+                                it.copy(markedGame = if (want == game.detectedGame) null else want)
+                            }
+                        },
+                        onToggleMedia = {
+                            val want = !game.isMedia
+                            titles.update(game.packageName) {
+                                it.copy(markedMedia = if (want == game.detectedMedia) null else want)
+                            }
+                        },
+                        onLaunchOptions = {
+                            actionsOpen = false
+                            launchEditorOpen = true
+                        },
+                        onAppInfo = {
+                            actionsOpen = false
+                            GameSession.openAppInfo(context, game.packageName)
+                        },
+                    )
+                }
+            }
+        }
         Spacer(Modifier.width(10.dp))
         Glyph(Icons.Default.Folder, onClick = onCollections, description = "Collections")
+    }
+    if (launchEditorOpen) {
+        Dialog(onDismissRequest = { launchEditorOpen = false }) {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 640.dp)
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp)
+                    .clip(cardShape())
+                    .background(Tile)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+            ) {
+                LaunchOverridesCard(game, showGameToggle = false, framed = false)
+                Text(
+                    "Done",
+                    color = PlayGreen,
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .clickable { launchEditorOpen = false }
+                        .padding(12.dp),
+                )
+            }
+        }
     }
 }
 
@@ -425,6 +514,8 @@ private fun GameInfoPane(game: Game, details: TitleDetails) {
         }
         Spacer(Modifier.height(28.dp))
         ArtPicker(game, artwork)
+        Spacer(Modifier.height(28.dp))
+        LaunchOverridesCard(game)
         Spacer(Modifier.height(28.dp))
         Text(
             "You can change the SteamGrid ID per game and suggest it for future releases. Check the box ‘Suggest this ID’ only for correct IDs",
@@ -692,6 +783,269 @@ private fun CollectionPicker(packageName: String, onDismiss: () -> Unit) {
                     .clickable(onClick = onDismiss)
                     .padding(8.dp),
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LaunchOverridesCard(game: Game, showGameToggle: Boolean = true, framed: Boolean = true) {
+    val titles = LocalTitles.current
+    val overrides by titles.state.collectAsState()
+    val override = overrides[game.packageName] ?: TitleOverride()
+    var extras by remember(game.packageName) { mutableStateOf(override.extras) }
+    var activity by remember(game.packageName) { mutableStateOf(override.activity) }
+
+    fun edit(block: (TitleOverride) -> TitleOverride) {
+        titles.update(game.packageName, block)
+    }
+
+    Column(
+        modifier = if (framed) {
+            Modifier
+                .fillMaxWidth()
+                .clip(cardShape())
+                .background(Tile)
+                .padding(18.dp)
+        } else {
+            Modifier.fillMaxWidth().padding(10.dp)
+        },
+    ) {
+        Text("Launch options", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            if (game.hasLeanback) {
+                "Leanback is available on this app. Windowing and extras apply to Play."
+            } else {
+                "Windowing, launch activity, and extras apply to Play."
+            },
+            color = TextMuted,
+            fontSize = 14.sp,
+        )
+        if (showGameToggle) {
+        Spacer(Modifier.height(14.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .tileFrame(false, cardShape(), width = 2.dp)
+                .tileClick {
+                    val want = !game.inLibrary
+                    edit { it.copy(markedGame = if (want == game.detectedGame) null else want) }
+                }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Treat as game", color = TextPrimary, fontSize = 15.sp)
+                Text(
+                    if (override.markedGame == null) {
+                        if (game.detectedGame) "Detected as a game" else "Detected as an app"
+                    } else {
+                        "Overridden"
+                    },
+                    color = TextMuted,
+                    fontSize = 13.sp,
+                )
+            }
+            Text(
+                if (game.inLibrary) "On" else "Off",
+                color = if (game.inLibrary) PlayGreen else TextMuted,
+                fontSize = 15.sp,
+            )
+        }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("Windowing", color = TextMuted, fontSize = 13.sp)
+        Spacer(Modifier.height(8.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SteamPill("Default", override.windowing == null) { edit { it.copy(windowing = null) } }
+            WindowingMode.entries.forEach { mode ->
+                SteamPill(mode.name, override.windowing == mode) { edit { it.copy(windowing = mode) } }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("Launch activity", color = TextMuted, fontSize = 13.sp)
+        Spacer(Modifier.height(8.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SteamPill("Default", override.launchIntent == null) {
+                edit { it.copy(launchIntent = null) }
+            }
+            SteamPill("App launcher", override.launchIntent == LaunchIntentKind.Launcher) {
+                edit { it.copy(launchIntent = LaunchIntentKind.Launcher) }
+            }
+            SteamPill(
+                if (game.hasLeanback) "Leanback" else "Leanback (none)",
+                override.launchIntent == LaunchIntentKind.Leanback,
+            ) {
+                edit { it.copy(launchIntent = LaunchIntentKind.Leanback) }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("Activity class (optional)", color = TextMuted, fontSize = 13.sp)
+        Spacer(Modifier.height(8.dp))
+        BasicTextField(
+            value = activity,
+            onValueChange = {
+                activity = it
+                edit { cur -> cur.copy(activity = it.trim()) }
+            },
+            singleLine = true,
+            textStyle = TextStyle(color = TextPrimary, fontSize = 16.sp),
+            cursorBrush = SolidColor(TextPrimary),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Background, RoundedCornerShape(4.dp))
+                .padding(12.dp),
+            decorationBox = { inner ->
+                if (activity.isEmpty()) {
+                    Text("com.unity3d.player.UnityPlayerActivity", color = TextMuted, fontSize = 16.sp)
+                }
+                inner()
+            },
+        )
+        Spacer(Modifier.height(16.dp))
+        Text("Arguments", color = TextMuted, fontSize = 13.sp)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Same flags as adb am start extras, for example --es unity -force-gles",
+            color = TextMuted,
+            fontSize = 13.sp,
+        )
+        Spacer(Modifier.height(8.dp))
+        BasicTextField(
+            value = extras,
+            onValueChange = {
+                extras = it
+                edit { cur -> cur.copy(extras = it) }
+            },
+            textStyle = TextStyle(color = TextPrimary, fontSize = 16.sp),
+            cursorBrush = SolidColor(TextPrimary),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(72.dp)
+                .background(Background, RoundedCornerShape(4.dp))
+                .padding(12.dp),
+            decorationBox = { inner ->
+                if (extras.isEmpty()) {
+                    Text("--es unity -force-gles", color = TextMuted, fontSize = 16.sp)
+                }
+                inner()
+            },
+        )
+        Spacer(Modifier.height(10.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SteamPill("Force GLES", extras.contains("-force-gles")) {
+                val next = mergeArg(extras, UNITY_FORCE_GLES)
+                extras = next
+                edit { it.copy(extras = next) }
+            }
+            SteamPill("Force Vulkan", extras.contains("-force-vulkan")) {
+                val next = mergeArg(extras, UNITY_FORCE_VULKAN)
+                extras = next
+                edit { it.copy(extras = next) }
+            }
+        }
+    }
+}
+
+private fun mergeArg(current: String, snippet: String): String {
+    if (current.contains(snippet) || current.contains(snippet.removePrefix("--es ").trim())) {
+        return current.trim()
+    }
+    return (current.trim() + " " + snippet).trim()
+}
+
+private val TitleOverride.hasLaunchTweaks: Boolean
+    get() = windowing != null ||
+        launchIntent != null ||
+        extras.isNotBlank() ||
+        activity.isNotBlank()
+
+@Composable
+private fun GameActionsMenu(
+    game: Game,
+    override: TitleOverride,
+    onToggleGame: () -> Unit,
+    onToggleMedia: () -> Unit,
+    onLaunchOptions: () -> Unit,
+    onAppInfo: () -> Unit,
+) {
+    val menuColor = Menu.copy(alpha = LocalTheme.current.chrome.menuAlpha)
+    val argsHint = when {
+        override.extras.isNotBlank() -> override.extras.trim()
+        override.activity.isNotBlank() -> override.activity
+        override.windowing != null -> override.windowing.name
+        override.launchIntent == LaunchIntentKind.Leanback -> "Leanback"
+        else -> "Windowing, Leanback, extras"
+    }
+    Column(
+        modifier = Modifier
+            .width(320.dp)
+            .clip(cardShape())
+            .frosted(menuColor)
+            .padding(vertical = 8.dp),
+    ) {
+        GameActionRow(
+            label = "Treat as game",
+            icon = Icons.Default.SportsEsports,
+            status = if (game.inLibrary) "On" else "Off",
+            onClick = onToggleGame,
+        )
+        GameActionRow(
+            label = "Treat as media",
+            icon = Icons.Default.LiveTv,
+            status = if (game.isMedia) "On" else "Off",
+            onClick = onToggleMedia,
+        )
+        GameActionRow(
+            label = "Launch options",
+            icon = Icons.Default.Tune,
+            status = argsHint,
+            onClick = onLaunchOptions,
+        )
+        GameActionRow(
+            label = "App info",
+            icon = Icons.Default.Info,
+            onClick = onAppInfo,
+        )
+    }
+}
+
+@Composable
+private fun GameActionRow(
+    label: String,
+    icon: ImageVector,
+    status: String? = null,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(label, color = TextPrimary, fontSize = 16.sp)
+            if (status != null) {
+                Text(
+                    status,
+                    color = TextMuted,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

@@ -48,13 +48,16 @@ import org.gamelauncher.data.LocalDetails
 import org.gamelauncher.data.LocalPlayHistory
 import org.gamelauncher.data.LocalSettings
 import org.gamelauncher.data.LocalThemeStore
+import org.gamelauncher.data.LocalTitles
 import org.gamelauncher.data.PlayHistory
 import org.gamelauncher.data.ThemeStore
+import org.gamelauncher.data.TitleOverridesStore
 import org.gamelauncher.data.PlayNewsRepository
 import org.gamelauncher.data.RunningApp
 import org.gamelauncher.data.TitleDetailsRepository
 import org.gamelauncher.data.effectiveFontScale
 import org.gamelauncher.data.findEntry
+import org.gamelauncher.data.withOverrides
 import org.gamelauncher.ui.chrome.ApplySystemBarMode
 import org.gamelauncher.ui.chrome.CommandBar
 import org.gamelauncher.ui.chrome.CommandHints
@@ -71,6 +74,8 @@ import org.gamelauncher.ui.home.HomeScreen
 import org.gamelauncher.ui.library.LibraryScreen
 import org.gamelauncher.ui.navigation.MenuItem
 import org.gamelauncher.ui.navigation.Screen
+import org.gamelauncher.ui.onboarding.OnboardingScreen
+import org.gamelauncher.ui.onboarding.OnboardingSession
 import org.gamelauncher.ui.settings.SettingsScreen
 import org.gamelauncher.ui.store.StoreScreen
 import org.gamelauncher.ui.theme.Background
@@ -86,12 +91,15 @@ fun LauncherApp(onClose: () -> Unit) {
     val theme by themeStore.resolved.collectAsState()
     GameLauncherTheme(theme) {
         val context = LocalContext.current
-        val snapshot = remember(context) { InstalledCatalog.load(context) }
+        val snapshotBase = remember(context) { InstalledCatalog.load(context) }
         val newsRepo = remember(context) { PlayNewsRepository(context) }
         val settings = remember(context) { LauncherSettings(context) }
+        val titles = remember(context) { TitleOverridesStore(context) }
         val accountPhoto = remember(context) { AccountPhotoStore(context) }
         val artwork = remember(context) { ArtworkRepository(context, newsRepo, settings) }
         val prefs by settings.state.collectAsState()
+        val titleOverrides by titles.state.collectAsState()
+        val snapshot = remember(snapshotBase, titleOverrides) { snapshotBase.withOverrides(titleOverrides) }
         val playHistory = remember(context) { PlayHistory(context) }
         val collections = remember(context) { CollectionsStore(context) }
         val details = remember(context) { TitleDetailsRepository(context, newsRepo) }
@@ -102,11 +110,20 @@ fun LauncherApp(onClose: () -> Unit) {
         var userMenuOpen by remember { mutableStateOf(false) }
         var searchOpen by remember { mutableStateOf(false) }
         var searchQuery by remember { mutableStateOf("") }
+        val showOnboarding = !prefs.onboardingComplete
+        val onboarding = remember { OnboardingSession() }
         val presence by AppPresence.snapshot.collectAsState()
         var fallbackRunning by remember { mutableStateOf(emptyList<RunningApp>()) }
         val current = stack.last()
         LaunchedEffect(snapshot, prefs.whatsNewCount) { newsRepo.refresh(snapshot, prefs.whatsNewCount) }
         LaunchedEffect(news) { artwork.onPlayArtUpdated() }
+        LaunchedEffect(showOnboarding) {
+            if (!showOnboarding) return@LaunchedEffect
+            menuOpen = false
+            userMenuOpen = false
+            searchOpen = false
+            searchQuery = ""
+        }
         LaunchedEffect(menuOpen, presence.open, presence.connected) {
             fun refresh() {
                 fallbackRunning = GameSession.runningApps(context)
@@ -132,6 +149,7 @@ fun LauncherApp(onClose: () -> Unit) {
 
         fun back() {
             when {
+                showOnboarding -> onboarding.back()
                 menuOpen -> menuOpen = false
                 userMenuOpen -> userMenuOpen = false
                 searchOpen -> {
@@ -147,6 +165,7 @@ fun LauncherApp(onClose: () -> Unit) {
 
         val activity = LocalContext.current as? MainActivity
         val onHomePressed = rememberUpdatedState {
+            if (showOnboarding) return@rememberUpdatedState
             if (current is Screen.Home) {
                 if (prefs.winOpensMenu) {
                     searchOpen = false
@@ -159,7 +178,7 @@ fun LauncherApp(onClose: () -> Unit) {
             }
         }
         val interceptKey = rememberUpdatedState { event: android.view.KeyEvent ->
-            if (!prefs.winOpensMenu || !isAndroidMenuKey(event.keyCode) || current !is Screen.Home) {
+            if (showOnboarding || !prefs.winOpensMenu || !isAndroidMenuKey(event.keyCode) || current !is Screen.Home) {
                 return@rememberUpdatedState false
             }
             if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
@@ -180,6 +199,7 @@ fun LauncherApp(onClose: () -> Unit) {
         }
 
         val hints = when {
+            showOnboarding -> onboarding.hints
             menuOpen -> CommandHints()
             current is Screen.Home -> CommandHints(extra = "Y" to "Favorite")
             current is Screen.Game -> CommandHints()
@@ -202,6 +222,7 @@ fun LauncherApp(onClose: () -> Unit) {
             LocalCollections provides collections,
             LocalDetails provides details,
             LocalThemeStore provides themeStore,
+            LocalTitles provides titles,
         ) {
         val chrome = theme.chrome
         val hazeState = rememberLauncherHazeState()
@@ -212,6 +233,7 @@ fun LauncherApp(onClose: () -> Unit) {
                 .background(Background)
                 .onPreviewKeyEvent { event ->
                     when {
+                        showOnboarding -> false
                         isLauncherMenuKey(event) && current is Screen.Home && prefs.winOpensMenu -> {
                             if (event.type == KeyEventType.KeyDown) {
                                 searchOpen = false
@@ -290,7 +312,12 @@ fun LauncherApp(onClose: () -> Unit) {
                         },
                         onSwitch = { app ->
                             menuOpen = false
-                            GameSession.switchTo(context, app)
+                            GameSession.switchTo(
+                                context,
+                                app,
+                                prefs,
+                                titles[app.packageName],
+                            )
                         },
                     )
                 }
@@ -300,11 +327,13 @@ fun LauncherApp(onClose: () -> Unit) {
                 searchQuery = searchQuery,
                 onSearchQuery = { searchQuery = it },
                 onToggleSearch = {
+                    if (showOnboarding) return@TopStatusBar
                     searchOpen = !searchOpen
                     if (!searchOpen) searchQuery = ""
                     userMenuOpen = false
                 },
                 onUserMenu = {
+                    if (showOnboarding) return@TopStatusBar
                     userMenuOpen = !userMenuOpen
                     searchOpen = false
                     searchQuery = ""
@@ -315,9 +344,16 @@ fun LauncherApp(onClose: () -> Unit) {
                     .fillMaxWidth()
                     .windowInsetsPadding(rememberTopChromeInsets(freeform)),
             )
+            if (showOnboarding) {
+                OnboardingScreen(
+                    session = onboarding,
+                    onFinished = { settings.update { it.copy(onboardingComplete = true) } },
+                )
+            }
             CommandBar(
                 hints,
                 onMenu = {
+                    if (showOnboarding) return@CommandBar
                     menuOpen = !menuOpen
                     userMenuOpen = false
                 },

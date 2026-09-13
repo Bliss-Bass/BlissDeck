@@ -1,11 +1,7 @@
 package org.gamelauncher.ui.settings
 
-import android.app.role.RoleManager
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -55,17 +51,15 @@ import androidx.compose.ui.unit.sp
 import org.gamelauncher.data.ArtworkBackdrop
 import org.gamelauncher.data.ArtworkCoverStyle
 import org.gamelauncher.data.ArtworkIconSource
-import org.gamelauncher.data.CloseGameService
-import org.gamelauncher.data.GameSession
+import org.gamelauncher.data.LaunchIntentKind
+import org.gamelauncher.data.LauncherPermissions
 import org.gamelauncher.data.LocalAccountPhoto
 import org.gamelauncher.data.LocalArtwork
 import org.gamelauncher.data.LocalSettings
 import org.gamelauncher.data.LocalThemeStore
-import org.gamelauncher.data.NotificationCountService
 import org.gamelauncher.data.ThemeBlurLevel
 import org.gamelauncher.data.ThemeIconStyle
 import org.gamelauncher.data.toIni
-import org.gamelauncher.data.isDefaultHomeApp
 import org.gamelauncher.data.rememberResumeTick
 import org.gamelauncher.data.RecentsArt
 import org.gamelauncher.data.RecentsLayout
@@ -73,6 +67,7 @@ import org.gamelauncher.data.RecentsShape
 import org.gamelauncher.data.RecentsSize
 import org.gamelauncher.data.StoreApps
 import org.gamelauncher.data.TextSize
+import org.gamelauncher.data.WindowingMode
 import org.gamelauncher.ui.components.SteamPill
 import org.gamelauncher.ui.components.cardShape
 import org.gamelauncher.ui.components.tileClick
@@ -95,10 +90,12 @@ fun SettingsScreen() {
     val prefs by settings.state.collectAsState()
     var apiKey by remember { mutableStateOf(artwork.apiKey) }
     val resumeTick = rememberResumeTick()
-    val isDefaultHome = remember(resumeTick) { isDefaultHomeApp(context) }
-    val accessibilityOn = remember(resumeTick) { CloseGameService.isEnabled(context) }
-    val usageOn = remember(resumeTick) { GameSession.hasUsageAccess(context) }
-    val notificationOn = remember(resumeTick) { NotificationCountService.isEnabled(context) }
+    val grants = remember(resumeTick) { LauncherPermissions.snapshot(context) }
+    val isDefaultHome = grants.home
+    val accessibilityOn = grants.accessibility
+    val usageOn = grants.usage
+    val notificationOn = grants.notifications
+    val allGrantsOn = grants.allOn
     val stores = remember(resumeTick) { StoreApps.installed(context) }
     val themeStore = LocalThemeStore.current
     val theme by themeStore.resolved.collectAsState()
@@ -469,6 +466,17 @@ fun SettingsScreen() {
                     pack.copy(layouts = pack.layouts.copy(homeLastPlayed = !pack.layouts.homeLastPlayed))
                 }
             }
+            SettingToggle("Media", theme.layouts.homeMedia) {
+                themeStore.patchCustom { pack ->
+                    pack.copy(layouts = pack.layouts.copy(homeMedia = !pack.layouts.homeMedia))
+                }
+            }
+            Text(
+                "Media lists video apps (YouTube, Plex, Netflix, Hulu, and others). Mark more from a title's sprocket.",
+                color = TextMuted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
             SettingToggle("Play now", theme.layouts.homePlayNow) {
                 themeStore.patchCustom { pack ->
                     pack.copy(layouts = pack.layouts.copy(homePlayNow = !pack.layouts.homePlayNow))
@@ -564,6 +572,29 @@ fun SettingsScreen() {
             }
         }
 
+        SettingsCard("Launch") {
+            Text(
+                "Defaults for Play and the sidebar. Per-game overrides live on a title's Game Info page, including marking an app as a game.",
+                color = TextMuted,
+                fontSize = 13.sp,
+            )
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "Windowing",
+                WindowingMode.entries.map { it to it.label },
+                prefs.windowing,
+            ) { settings.update { p -> p.copy(windowing = it) } }
+            Spacer(Modifier.height(14.dp))
+            ChoiceRow(
+                "Launch activity",
+                listOf(
+                    LaunchIntentKind.Auto to "App launcher",
+                    LaunchIntentKind.Leanback to "Leanback when available",
+                ),
+                prefs.launchIntent,
+            ) { settings.update { p -> p.copy(launchIntent = it) } }
+        }
+
         SettingsCard("Store") {
             if (stores.isEmpty()) {
                 Text(
@@ -583,28 +614,34 @@ fun SettingsScreen() {
 
         SettingsCard("Permissions") {
             PermissionRow(
+                title = "Setup wizard",
+                status = if (allGrantsOn) "All grants on" else "Walk through Home, usage, accessibility, and notifications",
+                action = "Run",
+            ) { settings.update { p -> p.copy(onboardingComplete = false) } }
+            Spacer(Modifier.height(10.dp))
+            PermissionRow(
                 title = "Default Home launcher",
                 status = if (isDefaultHome) "This app is Home" else "Not set",
                 action = if (isDefaultHome) "Change" else "Set as Home",
-            ) { openHomeChooser(context) }
+            ) { LauncherPermissions.openHomeChooser(context) }
             Spacer(Modifier.height(10.dp))
             PermissionRow(
                 title = "Accessibility (close games)",
                 status = if (accessibilityOn) "Enabled" else "Off",
                 action = "Open",
-            ) { openAccessibilitySettings(context) }
+            ) { LauncherPermissions.openAccessibility(context) }
             Spacer(Modifier.height(10.dp))
             PermissionRow(
                 title = "Usage access (running apps)",
                 status = if (usageOn) "Enabled" else "Off",
                 action = "Open",
-            ) { GameSession.openUsageAccessSettings(context) }
+            ) { LauncherPermissions.openUsageAccess(context) }
             Spacer(Modifier.height(10.dp))
             PermissionRow(
                 title = "Notification access (count)",
                 status = if (notificationOn) "Enabled" else "Off",
                 action = "Open",
-            ) { NotificationCountService.openSettings(context) }
+            ) { LauncherPermissions.openNotificationListener(context) }
         }
 
         SettingsCard("SteamGridDB") {
@@ -723,6 +760,20 @@ private val TextSize.label: String
         TextSize.Default -> "Default"
         TextSize.Larger -> "Larger"
         TextSize.Largest -> "Largest"
+    }
+
+private val WindowingMode.label: String
+    get() = when (this) {
+        WindowingMode.Auto -> "Auto"
+        WindowingMode.Freeform -> "Freeform"
+        WindowingMode.Standard -> "Standard"
+    }
+
+private val LaunchIntentKind.label: String
+    get() = when (this) {
+        LaunchIntentKind.Auto -> "App launcher"
+        LaunchIntentKind.Launcher -> "App launcher"
+        LaunchIntentKind.Leanback -> "Leanback when available"
     }
 
 @Composable
@@ -859,25 +910,6 @@ private fun PermissionRow(title: String, status: String, action: String, onClick
             Text(status, color = TextMuted, fontSize = 13.sp)
         }
         Text(action, color = PlayGreen, fontSize = 15.sp)
-    }
-}
-
-private fun openHomeChooser(context: Context) {
-    runCatching {
-        if (Build.VERSION.SDK_INT >= 29) {
-            val roles = context.getSystemService(RoleManager::class.java)
-            if (roles != null && roles.isRoleAvailable(RoleManager.ROLE_HOME) && !roles.isRoleHeld(RoleManager.ROLE_HOME)) {
-                context.startActivity(roles.createRequestRoleIntent(RoleManager.ROLE_HOME))
-                return
-            }
-        }
-        context.startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
-    }
-}
-
-private fun openAccessibilitySettings(context: Context) {
-    runCatching {
-        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
     }
 }
 

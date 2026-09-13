@@ -58,6 +58,9 @@ data class LauncherPrefs(
     val backdrop: ArtworkBackdrop = ArtworkBackdrop.Hero,
     val textSize: TextSize = TextSize.Default,
     val roundedCards: Boolean = false,
+    val onboardingComplete: Boolean = false,
+    val windowing: WindowingMode = WindowingMode.Auto,
+    val launchIntent: LaunchIntentKind = LaunchIntentKind.Auto,
 )
 
 data class RecentsMetrics(
@@ -112,6 +115,9 @@ class LauncherSettings(context: Context) {
         backdrop = enumValue(prefs.getString(KEY_BACKDROP, null), ArtworkBackdrop.Hero),
         textSize = enumValue(prefs.getString(KEY_TEXT_SIZE, null), TextSize.Default),
         roundedCards = prefs.getBoolean(KEY_ROUNDED_CARDS, false),
+        onboardingComplete = prefs.getBoolean(KEY_ONBOARDING, false),
+        windowing = enumValue(prefs.getString(KEY_WINDOWING, null), WindowingMode.Auto),
+        launchIntent = enumValue(prefs.getString(KEY_LAUNCH_INTENT, null), LaunchIntentKind.Auto),
     )
 
     private fun write(value: LauncherPrefs) {
@@ -135,6 +141,9 @@ class LauncherSettings(context: Context) {
             .putString(KEY_BACKDROP, value.backdrop.name)
             .putString(KEY_TEXT_SIZE, value.textSize.name)
             .putBoolean(KEY_ROUNDED_CARDS, value.roundedCards)
+            .putBoolean(KEY_ONBOARDING, value.onboardingComplete)
+            .putString(KEY_WINDOWING, value.windowing.name)
+            .putString(KEY_LAUNCH_INTENT, value.launchIntent.name)
             .apply()
     }
 
@@ -158,6 +167,9 @@ class LauncherSettings(context: Context) {
         const val KEY_BACKDROP = "artwork_backdrop"
         const val KEY_TEXT_SIZE = "text_size"
         const val KEY_ROUNDED_CARDS = "rounded_cards"
+        const val KEY_ONBOARDING = "onboarding_complete"
+        const val KEY_WINDOWING = "windowing"
+        const val KEY_LAUNCH_INTENT = "launch_intent"
     }
 }
 

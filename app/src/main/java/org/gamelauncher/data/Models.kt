@@ -4,6 +4,8 @@ enum class LibraryTab { AllGames, Installed, Collections }
 
 enum class HomeFeedTab { WhatsNew, Favorites, Recommended }
 
+enum class HomeShelfTab { LastPlayed, Media }
+
 enum class GamePageTab { Activity, Community, GameInfo }
 
 data class Game(
@@ -23,6 +25,10 @@ data class Game(
     val players: String,
     val controller: String,
     val coverHue: Float,
+    val detectedGame: Boolean = inLibrary,
+    val hasLeanback: Boolean = false,
+    val detectedMedia: Boolean = false,
+    val isMedia: Boolean = detectedMedia,
 )
 
 data class InstalledApp(
@@ -33,6 +39,10 @@ data class InstalledApp(
     val isGame: Boolean,
     val lastUpdateTime: Long = 0L,
     val versionName: String? = null,
+    val detectedGame: Boolean = isGame,
+    val hasLeanback: Boolean = false,
+    val detectedMedia: Boolean = false,
+    val isMedia: Boolean = detectedMedia,
 )
 
 data class NewsItem(

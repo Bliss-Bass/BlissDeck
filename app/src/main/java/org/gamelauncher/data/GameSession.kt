@@ -29,6 +29,7 @@ object GameSession {
 
     private const val TAG = "GameSession"
     private const val WINDOWING_MODE_FREEFORM = 5
+    private const val WINDOWING_MODE_FULLSCREEN = 1
     private const val REQUEST_BASE = 0x4100
     private val mainHandler = Handler(Looper.getMainLooper())
     @Volatile private var launchableCache: List<String>? = null
@@ -36,11 +37,19 @@ object GameSession {
     @Volatile private var resumedCache: Set<String>? = null
     @Volatile private var resumedAt = 0L
 
-    fun launch(context: Context, packageName: String): Boolean {
-        val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
+    fun launch(
+        context: Context,
+        packageName: String,
+        prefs: LauncherPrefs = LauncherPrefs(),
+        override: TitleOverride = TitleOverride(),
+    ): Boolean {
+        val intent = launchIntent(context, packageName, prefs, override) ?: return false
+        applyAmExtras(intent, override.extras)
+        applyComponent(intent, override.activity, packageName)
         val activity = context.findActivity()
+        val windowing = override.windowing ?: prefs.windowing
         val started = if (activity != null) {
-            launchFromActivity(activity, packageName, intent)
+            launchFromActivity(activity, packageName, intent, windowing)
         } else {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
             runCatching {
@@ -120,16 +129,25 @@ object GameSession {
     }
 
     @Suppress("DEPRECATION")
-    private fun launchFromActivity(activity: Activity, packageName: String, launch: Intent): Boolean {
+    private fun launchFromActivity(
+        activity: Activity,
+        packageName: String,
+        launch: Intent,
+        windowing: WindowingMode,
+    ): Boolean {
         val intent = Intent(launch)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
         val opts = ActivityOptions.makeBasic()
+        val mode = when (windowing) {
+            WindowingMode.Standard -> WINDOWING_MODE_FULLSCREEN
+            WindowingMode.Auto, WindowingMode.Freeform -> WINDOWING_MODE_FREEFORM
+        }
         runCatching {
             ActivityOptions::class.java
                 .getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType)
-                .invoke(opts, WINDOWING_MODE_FREEFORM)
+                .invoke(opts, mode)
         }
-        Log.i(TAG, "launch $packageName component=${intent.component}")
+        Log.i(TAG, "launch $packageName component=${intent.component} windowing=$windowing")
         return runCatching {
             activity.startActivityForResult(intent, requestCode(packageName), opts.toBundle())
             true
@@ -140,6 +158,28 @@ object GameSession {
             Log.w(TAG, "launch failed $packageName", error)
             false
         }
+    }
+
+    private fun launchIntent(
+        context: Context,
+        packageName: String,
+        prefs: LauncherPrefs,
+        override: TitleOverride,
+    ): Intent? {
+        val pm = context.packageManager
+        val kind = override.launchIntent ?: prefs.launchIntent
+        val wantLeanback = kind == LaunchIntentKind.Leanback
+        if (wantLeanback) {
+            leanbackLaunchIntent(pm, packageName)?.let { return it }
+        }
+        return pm.getLaunchIntentForPackage(packageName)
+    }
+
+    private fun leanbackLaunchIntent(pm: PackageManager, packageName: String): Intent? {
+        val resolved = leanbackActivity(pm, packageName) ?: return null
+        return Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
+            .setClassName(resolved.activityInfo.packageName, resolved.activityInfo.name)
     }
 
     fun runningApps(context: Context): List<RunningApp> {
@@ -204,12 +244,15 @@ object GameSession {
     }
 
     fun openUsageAccessSettings(context: Context) {
-        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        runCatching { context.startActivity(intent) }
+        LauncherPermissions.openUsageAccess(context)
     }
 
-    fun switchTo(context: Context, app: RunningApp): Boolean {
+    fun switchTo(
+        context: Context,
+        app: RunningApp,
+        prefs: LauncherPrefs = LauncherPrefs(),
+        override: TitleOverride = TitleOverride(),
+    ): Boolean {
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         if (app.taskId != null) {
             val moved = runCatching {
@@ -218,7 +261,7 @@ object GameSession {
             }.getOrDefault(false)
             if (moved) return true
         }
-        return launch(context, app.packageName)
+        return launch(context, app.packageName, prefs, override)
     }
 
     internal fun hideFromSwitcher(packageName: String, self: String): Boolean {

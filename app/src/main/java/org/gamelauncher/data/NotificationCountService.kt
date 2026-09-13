@@ -68,9 +68,7 @@ class NotificationCountService : NotificationListenerService() {
                     ComponentName(context, NotificationCountService::class.java).flattenToString(),
                 )
             }
-            runCatching {
-                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }
+            runCatching { context.startSettings(intent) }
         }
     }
 }
