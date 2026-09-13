@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -41,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -260,29 +262,46 @@ fun HomeScreen(
     }
 }
 
+private fun coverflowScroll(
+    selectedIndex: Int,
+    metrics: RecentsMetrics,
+    viewportWidth: Dp,
+): Dp {
+    val naturalHero = metrics.peek * selectedIndex.coerceAtLeast(0)
+    val center = ((viewportWidth - metrics.heroWidth) / 2).coerceAtLeast(0.dp)
+    return (naturalHero - center).coerceAtLeast(0.dp)
+}
+
 private fun recentCoverXAt(
     index: Int,
     selectedIndex: Int,
     metrics: RecentsMetrics,
+    viewportWidth: Dp,
 ): Dp {
     val leftStack = metrics.peek * selectedIndex.coerceAtLeast(0)
     val delta = index - selectedIndex
-    return when {
+    val x = when {
         delta < 0 -> metrics.peek * index
         delta == 0 -> leftStack
         else -> leftStack + metrics.heroWidth - metrics.overlap + metrics.peek * (delta - 1)
     }
+    return x - coverflowScroll(selectedIndex, metrics, viewportWidth)
 }
 
 private fun recentCoverX(
     index: Int,
     selected: Float,
     metrics: RecentsMetrics,
+    viewportWidth: Dp,
 ): Dp {
     val i0 = floor(selected).toInt()
     val t = selected - i0
-    if (t <= 0.0008f) return recentCoverXAt(index, i0, metrics)
-    return lerp(recentCoverXAt(index, i0, metrics), recentCoverXAt(index, i0 + 1, metrics), t)
+    if (t <= 0.0008f) return recentCoverXAt(index, i0, metrics, viewportWidth)
+    return lerp(
+        recentCoverXAt(index, i0, metrics, viewportWidth),
+        recentCoverXAt(index, i0 + 1, metrics, viewportWidth),
+        t,
+    )
 }
 
 private fun coverflowPos(raw: Float, last: Float): Float {
@@ -379,10 +398,11 @@ private fun RecentsCoverflow(
             if (game.id != selectedId) onSelect(game.id)
         }
     }
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .height(metrics.heroHeight)
+            .clipToBounds()
             .pointerInput(stepPx, last) {
                 val slop = viewConfiguration.touchSlop
                 awaitEachGesture {
@@ -453,7 +473,7 @@ private fun RecentsCoverflow(
                 val delta = index - visualPos
                 val expand = (1f - abs(delta)).coerceIn(0f, 1f)
                 val selected = index == nearest
-                val x = recentCoverX(index, visualPos, metrics)
+                val x = recentCoverX(index, visualPos, metrics, maxWidth)
                 val y = lerp((metrics.heroHeight - metrics.thumbHeight) / 2, 0.dp, expand)
                 val rotationY = when {
                     expand >= 0.99f || !prefs.recentsTilt -> 0f
