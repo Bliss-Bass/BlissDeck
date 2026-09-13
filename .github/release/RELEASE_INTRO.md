@@ -11,16 +11,16 @@ BlissDeck is a landscape Steam-library **HOME** for Android-x86, Bliss OS, Prime
 
 ## Install
 
-1. Download **`app-release.apk`** below (signed; recommended for everyday use).
+1. Download **`app-universal-release.apk`** below. That file is the **universal** build (arm64 + x86_64 + 32-bit). There are also per-ABI APKs if you want a named download.
 2. Install on a landscape Android device or Bliss OS / Waydroid session.
 3. MENU -> **Set as Home app**, or launch from the app drawer.
 
 ```bash
-adb install -r app-release.apk
+adb install -r app-universal-release.apk
 ```
 
 ### Automatic updates (Obtainium)
 
-Install [Obtainium](https://github.com/ImranR98/Obtainium), add GitHub repo **`Bliss-Bass/BlissDeck`**, filter releases to **`app-release.apk`**, and it will track new **`v*`** tags from this page.
+Install [Obtainium](https://github.com/ImranR98/Obtainium), add GitHub repo **`Bliss-Bass/BlissDeck`**, filter releases to **`app-universal-release.apk`**, and it will track new **`v*`** tags from this page.
 
 Optional extras after install: usage access (last played), accessibility (close/switch freeform games), and the notification listener (badge count).

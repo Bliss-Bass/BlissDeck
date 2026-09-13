@@ -43,14 +43,22 @@ jobs:
         RELEASE_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
       run: ./gradlew assembleDebug assembleRelease
 
-    - name: Verify release APK signature
+    - name: Verify release APK signatures
       run: |
-        APK=app/build/outputs/apk/release/app-release.apk
-        jarsigner -verify -verbose -certs "$APK" | tail -20
-        if jarsigner -verify -verbose -certs "$APK" | grep -qi "CN=Android Debug"; then
-          echo "::error::APK is debug-signed; check the SIGNING_* secrets"
+        shopt -s nullglob
+        apks=(app/build/outputs/apk/release/*.apk)
+        if [ "${#apks[@]}" -eq 0 ]; then
+          echo "::error::No release APKs under app/build/outputs/apk/release/"
           exit 1
         fi
+        for apk in "${apks[@]}"; do
+          echo "Verifying $apk"
+          jarsigner -verify -verbose -certs "$apk" | tail -8
+          if jarsigner -verify -verbose -certs "$apk" | grep -qi "CN=Android Debug"; then
+            echo "::error::$apk is debug-signed; check the SIGNING_* secrets"
+            exit 1
+          fi
+        done
 
     - name: Generate release notes
       run: |
@@ -64,7 +72,7 @@ jobs:
         tag_name: ${{ inputs.tag || github.ref_name }}
         files: |
           app/build/outputs/apk/debug/app-debug.apk
-          app/build/outputs/apk/release/app-release.apk
+          app/build/outputs/apk/release/*.apk
         body_path: release-notes.md
         generate_release_notes: false
         draft: false

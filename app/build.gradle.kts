@@ -24,7 +24,16 @@ android {
         versionCode = 1
         versionName = "0.1.0-dev"
         ndk {
-            abiFilters += listOf("x86_64", "arm64-v8a", "armeabi-v7a", "x86")
+            abiFilters += listOf("arm64-v8a", "x86_64", "armeabi-v7a", "x86")
+        }
+    }
+
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "x86_64")
+            isUniversalApk = true
         }
     }
 

@@ -26,7 +26,7 @@ jobs:
         SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
       run: bash .github/scripts/decode-signing-keystore.sh app/release.keystore
 
-    - name: Build signed Release APK
+    - name: Build signed Release APKs
       env:
         RELEASE_STORE_FILE: app/release.keystore
         RELEASE_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
@@ -34,20 +34,28 @@ jobs:
         RELEASE_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
       run: ./gradlew assembleRelease
 
-    - name: Verify release APK signature
+    - name: Verify release APK signatures
       run: |
-        APK=app/build/outputs/apk/release/app-release.apk
-        jarsigner -verify -verbose -certs "$APK" | tail -20
-        if jarsigner -verify -verbose -certs "$APK" | grep -qi "CN=Android Debug"; then
-          echo "::error::APK is debug-signed; check the SIGNING_* secrets"
+        shopt -s nullglob
+        apks=(app/build/outputs/apk/release/*.apk)
+        if [ "${#apks[@]}" -eq 0 ]; then
+          echo "::error::No release APKs under app/build/outputs/apk/release/"
           exit 1
         fi
+        for apk in "${apks[@]}"; do
+          echo "Verifying $apk"
+          jarsigner -verify -verbose -certs "$apk" | tail -8
+          if jarsigner -verify -verbose -certs "$apk" | grep -qi "CN=Android Debug"; then
+            echo "::error::$apk is debug-signed; check the SIGNING_* secrets"
+            exit 1
+          fi
+        done
 
-    - name: Upload Release APK
+    - name: Upload Release APKs
       uses: actions/upload-artifact@v4
       with:
         name: BlissDeck-Release
-        path: app/build/outputs/apk/release/app-release.apk
+        path: app/build/outputs/apk/release/*.apk
         if-no-files-found: error
 
     - name: Remove signing keystore

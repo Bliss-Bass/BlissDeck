@@ -36,8 +36,23 @@ if [ -z "$CHANGELOG" ]; then
 fi
 
 apk_size() { [ -f "$1" ] && du -h "$1" | cut -f1 || true; }
-RELEASE_APK_SIZE="$(apk_size app/build/outputs/apk/release/app-release.apk)"
+RELEASE_DIR="app/build/outputs/apk/release"
+UNIVERSAL_APK=""
+ARM64_APK=""
+X64_APK=""
+for apk in "$RELEASE_DIR"/*.apk; do
+  [ -f "$apk" ] || continue
+  base="$(basename "$apk")"
+  case "$base" in
+    *arm64-v8a*) ARM64_APK="$apk" ;;
+    *x86_64*) X64_APK="$apk" ;;
+    *universal*|*app-release.apk) UNIVERSAL_APK="$apk" ;;
+  esac
+done
 DEBUG_APK_SIZE="$(apk_size app/build/outputs/apk/debug/app-debug.apk)"
+UNIVERSAL_SIZE="$(apk_size "$UNIVERSAL_APK")"
+ARM64_SIZE="$(apk_size "$ARM64_APK")"
+X64_SIZE="$(apk_size "$X64_APK")"
 
 {
   echo "# BlissDeck ${TAG#v}"
@@ -48,8 +63,16 @@ DEBUG_APK_SIZE="$(apk_size app/build/outputs/apk/debug/app-debug.apk)"
   echo ""
   echo "| File | Description |"
   echo "|------|-------------|"
-  echo "| **app-release.apk**${RELEASE_APK_SIZE:+ (~$RELEASE_APK_SIZE)} | Signed release build. Use for installs and in-place updates. |"
+  echo "| **$(basename "${UNIVERSAL_APK:-app-universal-release.apk}")**${UNIVERSAL_SIZE:+ (~$UNIVERSAL_SIZE)} | Signed **universal** build (arm64 + x86_64 + 32-bit). Use this if you are unsure. |"
+  if [ -n "$ARM64_APK" ]; then
+    echo "| **$(basename "$ARM64_APK")**${ARM64_SIZE:+ (~$ARM64_SIZE)} | Signed **arm64-v8a** build. |"
+  fi
+  if [ -n "$X64_APK" ]; then
+    echo "| **$(basename "$X64_APK")**${X64_SIZE:+ (~$X64_SIZE)} | Signed **x86_64** build for Android-x86 / Bliss OS tablets. |"
+  fi
   echo "| **app-debug.apk**${DEBUG_APK_SIZE:+ (~$DEBUG_APK_SIZE)} | Debug build with logging enabled. For testing only. |"
+  echo ""
+  echo "Almost all of BlissDeck is Kotlin. The per-ABI APKs only differ by a small native library; they will not make a slow tablet faster."
   echo ""
   echo "### Automatic updates (Obtainium)"
   echo ""
@@ -60,7 +83,7 @@ DEBUG_APK_SIZE="$(apk_size app/build/outputs/apk/debug/app-debug.apk)"
   echo "| **Source** | GitHub |"
   echo "| **Repository** | \`${REPO}\` |"
   echo "| **Release filter** | \`v*\` tags |"
-  echo "| **APK filter** | \`app-release.apk\` |"
+  echo "| **APK filter** | \`app-universal-release.apk\` |"
   echo ""
   echo "### Build info"
   echo ""

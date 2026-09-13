@@ -36,10 +36,12 @@ Gamepad focus is still catching up (A/B/Y in the footer are mostly hints; system
 
 Signed APKs ship from GitHub Releases when a `v*` tag is pushed (for example `v0.1.0`). Debug APKs are built on every push to `main`.
 
-1. Download **`app-release.apk`** from [Releases](https://github.com/Bliss-Bass/BlissDeck/releases).
-2. Install with `adb install -r app-release.apk`, then MENU -> **Set as Home app**.
+1. Download **`app-universal-release.apk`** from [Releases](https://github.com/Bliss-Bass/BlissDeck/releases). That file is a **universal** APK (arm64-v8a, x86_64, and 32-bit). Releases also attach `app-arm64-v8a-release.apk` and `app-x86_64-release.apk`.
+2. Install with `adb install -r app-universal-release.apk`, then MENU -> **Set as Home app**.
 
-[Obtainium](https://github.com/ImranR98/Obtainium) can track this repo: source GitHub, repository `Bliss-Bass/BlissDeck`, APK filter `app-release.apk`.
+The app is almost all Kotlin/Compose. Native code is a tiny graphics `.so` per ABI, so an x86_64-only APK will not make a slower x86 tablet catch up to a faster ARM one. Obtainium can filter on `app-universal-release.apk`.
+
+[Obtainium](https://github.com/ImranR98/Obtainium) can track this repo: source GitHub, repository `Bliss-Bass/BlissDeck`, APK filter `app-universal-release.apk`.
 
 CI matches the other Bass Android apps ([BumpDesk](https://github.com/electrikjesus/BumpDesk), [GameNative-x64](https://github.com/Bliss-Bass/GameNative-x64)):
 
@@ -47,8 +49,8 @@ CI matches the other Bass Android apps ([BumpDesk](https://github.com/electrikje
 |----------|------|
 | **Verify Build** | push/PR to `main`: `assembleDebug` + unit tests |
 | **Compile Debug APK** | push to `main`, or run manually: uploads `app-debug.apk` |
-| **Compile Release APK** | manual: signed `app-release.apk` |
-| **Create Release** | `v*` tag: signed release + debug APKs and notes |
+| **Compile Release APK** | manual: signed universal + arm64 + x86_64 APKs |
+| **Create Release** | `v*` tag: those release APKs, debug APK, and notes |
 
 Signed jobs need repository Actions secrets: `SIGNING_KEY`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`. Generate a keystore off-tree and upload those secrets with:
 
