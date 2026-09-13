@@ -5,10 +5,10 @@ alwaysApply: true
 
 # Settings-first choices
 
-If a behavior is something a user or venue could reasonably pick — store app, windowing mode, theme pack, key bindings, which Home tabs show — add it to `SettingsScreen` and persist it in `LauncherSettings` / `LauncherPrefs`. Do not leave it as a one-off picker, a silent default, or a hardcoded package list with no override.
+If a behavior is something a user or venue could reasonably pick (store app, windowing mode, theme pack, key bindings, which Home tabs show), add it to `SettingsScreen` and persist it in `LauncherSettings` / `LauncherPrefs`. Do not leave it as a one-off picker, a silent default, or a hardcoded package list with no override.
 
 Examples that belong in Settings: preferred store (Play / Aurora / Droid-ify / Neo Store), Auto vs Desktop vs Tablet windowing, brand pack import, Recents layout.
 
 Keep the in-context UI (Store screen, sidebar) as the action. Settings holds the preference. If only one option exists, Settings can still show it; auto-launch that option until a second appears.
 
-When adding a feature, ask: “Could this be a Settings row?” If yes, add the row in the same change.
+When adding a feature, ask: "Could this be a Settings row?" If yes, add the row in the same change.

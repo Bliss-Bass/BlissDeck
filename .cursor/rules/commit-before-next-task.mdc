@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Commit before the next task
 
-When a unit of work is done, create a git commit before starting a different task in the same conversation. Do this even if the user did not say "commit" — waiting until the end of a long session is how work gets forgotten.
+When a unit of work is done, create a git commit before starting a different task in the same conversation. Do this even if the user did not say "commit". Waiting until the end of a long session is how work gets forgotten.
 
 A unit of work is a feature, fix, refactor, or rule that leaves the repo in a coherent state. If the next request is a new concern, commit first.
 

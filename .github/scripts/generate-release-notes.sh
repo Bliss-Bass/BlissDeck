@@ -82,11 +82,11 @@ DEBUG_APK_SIZE="$(apk_size app/build/outputs/apk/debug/app-debug.apk)"
 
   echo "## Changes in the last 30 days"
   echo ""
-  echo "_Since ${SINCE_DATE} · ${COMMIT_COUNT} commits_"
+  echo "_Since ${SINCE_DATE} / ${COMMIT_COUNT} commits_"
   echo ""
   echo "$CHANGELOG"
   echo ""
   echo "---"
   echo ""
-  echo "_Built from [\`${TAG}\`](https://github.com/${REPO}/releases/tag/${TAG}) · [All commits](https://github.com/${REPO}/commits/${TAG})_"
+  echo "_Built from [\`${TAG}\`](https://github.com/${REPO}/releases/tag/${TAG}) / [All commits](https://github.com/${REPO}/commits/${TAG}) / [GPL-3.0](https://github.com/${REPO}/blob/main/LICENSE) / [Commercial](https://github.com/${REPO}/blob/main/LICENSES/LicenseRef-Bass-OS-Commercial.txt)_"
 }
