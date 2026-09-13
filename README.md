@@ -8,6 +8,14 @@ The display name is **BlissDeck**. The application ID is still `org.gamelauncher
 
 The layouts follow [Vapor Launcher](https://github.com/imperador/vapor-launcher). This is a new Kotlin / Jetpack Compose app, not a Qt port or a ROM frontend.
 
+## Screenshots
+
+| ![Home](docs/images/home.jpg) | ![Library](docs/images/library.jpg) |
+|:----------------------------:|:----------------------------------:|
+| Home | Library |
+| ![Game](docs/images/game.jpg) | ![Settings](docs/images/settings.jpg) |
+| Game | Settings |
+
 ## Features
 
 - **Home**: Last Played recents (coverflow or row), selected-title backdrop, and L1/R1 feed tabs for What's New, Favorites, and Recommended
