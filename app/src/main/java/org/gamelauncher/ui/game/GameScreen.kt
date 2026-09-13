@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
@@ -76,6 +77,7 @@ import org.gamelauncher.data.ArtSlot
 import org.gamelauncher.data.Artwork
 import org.gamelauncher.data.AppPresence
 import org.gamelauncher.data.AppRunState
+import org.gamelauncher.data.ExportedActivity
 import org.gamelauncher.data.Game
 import org.gamelauncher.data.GamePageTab
 import org.gamelauncher.data.GameSession
@@ -95,6 +97,7 @@ import org.gamelauncher.data.TitleOverride
 import org.gamelauncher.data.UNITY_FORCE_GLES
 import org.gamelauncher.data.UNITY_FORCE_VULKAN
 import org.gamelauncher.data.WindowingMode
+import org.gamelauncher.data.exportedActivities
 import org.gamelauncher.data.toInstalledApp
 import org.gamelauncher.ui.components.AmbientBackdrop
 import org.gamelauncher.ui.components.GameIcon
@@ -894,7 +897,6 @@ private fun LaunchOverridesCard(game: Game, showGameToggle: Boolean = true, fram
     val overrides by titles.state.collectAsState()
     val override = overrides[game.packageName] ?: TitleOverride()
     var extras by remember(game.packageName) { mutableStateOf(override.extras) }
-    var activity by remember(game.packageName) { mutableStateOf(override.activity) }
 
     fun edit(block: (TitleOverride) -> TitleOverride) {
         titles.update(game.packageName, block)
@@ -987,27 +989,12 @@ private fun LaunchOverridesCard(game: Game, showGameToggle: Boolean = true, fram
             }
         }
         Spacer(Modifier.height(16.dp))
-        Text("Activity class (optional)", color = TextMuted, fontSize = 13.sp)
+        Text("Activity class", color = TextMuted, fontSize = 13.sp)
         Spacer(Modifier.height(8.dp))
-        BasicTextField(
-            value = activity,
-            onValueChange = {
-                activity = it
-                edit { cur -> cur.copy(activity = it.trim()) }
-            },
-            singleLine = true,
-            textStyle = TextStyle(color = TextPrimary, fontSize = 16.sp),
-            cursorBrush = SolidColor(TextPrimary),
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Background, RoundedCornerShape(4.dp))
-                .padding(12.dp),
-            decorationBox = { inner ->
-                if (activity.isEmpty()) {
-                    Text("com.unity3d.player.UnityPlayerActivity", color = TextMuted, fontSize = 16.sp)
-                }
-                inner()
-            },
+        ActivityClassPicker(
+            packageName = game.packageName,
+            selected = override.activity,
+            onSelect = { edit { cur -> cur.copy(activity = it) } },
         )
         Spacer(Modifier.height(16.dp))
         Text("Arguments", color = TextMuted, fontSize = 13.sp)
@@ -1055,6 +1042,138 @@ private fun LaunchOverridesCard(game: Game, showGameToggle: Boolean = true, fram
             }
         }
     }
+}
+
+@Composable
+private fun ActivityClassPicker(
+    packageName: String,
+    selected: String,
+    onSelect: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    val declared = remember(packageName) { exportedActivities(context, packageName) }
+    val selectedClass = activityClassName(selected, packageName)
+    val activities = remember(declared, selectedClass) {
+        if (selectedClass.isNotBlank() && declared.none { it.className == selectedClass }) {
+            listOf(ExportedActivity(selectedClass, selectedClass.substringAfterLast('.'))) + declared
+        } else {
+            declared
+        }
+    }
+    val current = activities.firstOrNull { it.className == selectedClass }
+    var open by remember(packageName) { mutableStateOf(false) }
+    if (activities.isEmpty()) {
+        var typed by remember(packageName) { mutableStateOf(selected) }
+        BasicTextField(
+            value = typed,
+            onValueChange = {
+                typed = it
+                onSelect(it.trim())
+            },
+            singleLine = true,
+            textStyle = TextStyle(color = TextPrimary, fontSize = 16.sp),
+            cursorBrush = SolidColor(TextPrimary),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Background, RoundedCornerShape(4.dp))
+                .padding(12.dp),
+            decorationBox = { inner ->
+                if (typed.isEmpty()) {
+                    Text("com.unity3d.player.UnityPlayerActivity", color = TextMuted, fontSize = 16.sp)
+                }
+                inner()
+            },
+        )
+        return
+    }
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .tileFrame(open, cardShape(), width = 2.dp)
+                .tileClick { open = !open }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (selectedClass.isBlank()) "Default" else current?.menuLabel ?: selectedClass.substringAfterLast('.'),
+                    color = TextPrimary,
+                    fontSize = 16.sp,
+                )
+                if (selectedClass.isNotBlank()) {
+                    Text(
+                        selectedClass,
+                        color = TextMuted,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = TextPrimary)
+        }
+        if (open) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp)
+                    .heightIn(max = 240.dp)
+                    .verticalScroll(rememberScrollState())
+                    .clip(cardShape())
+                    .background(Background),
+            ) {
+                ActivityClassRow("Default", "", selected = selectedClass.isBlank()) {
+                    onSelect("")
+                    open = false
+                }
+                activities.forEach { item ->
+                    ActivityClassRow(
+                        title = item.menuLabel,
+                        className = item.className,
+                        selected = item.className == selectedClass,
+                    ) {
+                        onSelect(item.className)
+                        open = false
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActivityClassRow(
+    title: String,
+    className: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .tileClick(onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Text(title, color = if (selected) PlayGreen else TextPrimary, fontSize = 15.sp)
+        if (className.isNotBlank()) {
+            Text(
+                className,
+                color = TextMuted,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+private fun activityClassName(spec: String, packageName: String): String {
+    val trimmed = spec.trim().removePrefix("component:").trim()
+    if (trimmed.isBlank()) return ""
+    val slash = trimmed.indexOf('/')
+    val cls = if (slash >= 0) trimmed.substring(slash + 1) else trimmed
+    return if (cls.startsWith('.')) packageName + cls else cls
 }
 
 private fun mergeArg(current: String, snippet: String): String {

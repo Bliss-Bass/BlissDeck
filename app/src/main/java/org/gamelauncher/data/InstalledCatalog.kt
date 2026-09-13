@@ -38,6 +38,24 @@ object InstalledCatalog {
     }
 }
 
+data class ExportedActivity(
+    val className: String,
+    val label: String,
+    val launcher: Boolean = false,
+    val leanback: Boolean = false,
+) {
+    val shortName: String get() = className.substringAfterLast('.')
+
+    val menuLabel: String
+        get() {
+            val named = label.isNotBlank() &&
+                !label.equals(shortName, ignoreCase = true) &&
+                '.' !in label
+            val base = if (named) label else shortName
+            return if (leanback && !launcher) "$base (TV)" else base
+        }
+}
+
 fun LibrarySnapshot.findEntry(id: String): Game? =
     games.firstOrNull { it.id == id } ?: installed.firstOrNull { it.id == id }?.toGame()
 
@@ -138,6 +156,66 @@ private fun ResolveInfo.toInstalledApp(pm: PackageManager, leanback: Set<String>
         detectedMedia = media,
         isMedia = media,
     )
+}
+
+fun exportedActivities(context: Context, packageName: String): List<ExportedActivity> {
+    val pm = context.packageManager
+    val merged = LinkedHashMap<String, ExportedActivity>()
+    fun add(className: String, label: String, launcher: Boolean, leanback: Boolean) {
+        if (className.isBlank()) return
+        val previous = merged[className]
+        merged[className] = ExportedActivity(
+            className = className,
+            label = label.ifBlank { previous?.label.orEmpty().ifBlank { className.substringAfterLast('.') } },
+            launcher = previous?.launcher == true || launcher,
+            leanback = previous?.leanback == true || leanback,
+        )
+    }
+    declaredExported(pm, packageName).forEach { add(it.first, it.second, launcher = false, leanback = false) }
+    resolvePackageActivities(pm, packageName, Intent.CATEGORY_LAUNCHER).forEach {
+        add(it.first, it.second, launcher = true, leanback = false)
+    }
+    resolvePackageActivities(pm, packageName, Intent.CATEGORY_LEANBACK_LAUNCHER).forEach {
+        add(it.first, it.second, launcher = false, leanback = true)
+    }
+    return merged.values.sortedWith(
+        compareByDescending<ExportedActivity> { it.launcher }
+            .thenByDescending { it.leanback }
+            .thenBy { it.menuLabel.lowercase() },
+    )
+}
+
+private fun declaredExported(pm: PackageManager, packageName: String): List<Pair<String, String>> {
+    val flags = PackageManager.GET_ACTIVITIES
+    val info = runCatching {
+        if (Build.VERSION.SDK_INT >= 33) {
+            pm.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(flags.toLong()))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getPackageInfo(packageName, flags)
+        }
+    }.getOrNull() ?: return emptyList()
+    return info.activities.orEmpty()
+        .filter { it.enabled && it.exported }
+        .map { it.name to it.loadLabel(pm).toString() }
+}
+
+private fun resolvePackageActivities(
+    pm: PackageManager,
+    packageName: String,
+    category: String,
+): List<Pair<String, String>> {
+    val intent = Intent(Intent.ACTION_MAIN).addCategory(category).setPackage(packageName)
+    val resolved = if (Build.VERSION.SDK_INT >= 33) {
+        pm.queryIntentActivities(
+            intent,
+            PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong()),
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+    }
+    return resolved.map { it.activityInfo.name to it.loadLabel(pm).toString() }
 }
 
 private fun packageInfo(pm: PackageManager, packageName: String): android.content.pm.PackageInfo? {
