@@ -513,6 +513,12 @@ fun SettingsScreen() {
                     pack.copy(layouts = pack.layouts.copy(gameActivity = !pack.layouts.gameActivity))
                 }
             }
+            Text(
+                "Activity lists Play Store and Steam notes for that title, plus launches you made from BlissDeck.",
+                color = TextMuted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
             SettingToggle("Community", theme.layouts.gameCommunity) {
                 themeStore.patchCustom { pack ->
                     pack.copy(layouts = pack.layouts.copy(gameCommunity = !pack.layouts.gameCommunity))

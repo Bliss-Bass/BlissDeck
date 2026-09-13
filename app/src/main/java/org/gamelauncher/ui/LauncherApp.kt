@@ -45,6 +45,7 @@ import org.gamelauncher.data.LocalAccountPhoto
 import org.gamelauncher.data.LocalArtwork
 import org.gamelauncher.data.LocalCollections
 import org.gamelauncher.data.LocalDetails
+import org.gamelauncher.data.LocalNews
 import org.gamelauncher.data.LocalPlayHistory
 import org.gamelauncher.data.LocalSettings
 import org.gamelauncher.data.LocalThemeStore
@@ -222,6 +223,7 @@ fun LauncherApp(onClose: () -> Unit) {
             LocalPlayHistory provides playHistory,
             LocalCollections provides collections,
             LocalDetails provides details,
+            LocalNews provides newsRepo,
             LocalThemeStore provides themeStore,
             LocalTitles provides titles,
         ) {
@@ -264,6 +266,7 @@ fun LauncherApp(onClose: () -> Unit) {
                             mediaNews = mediaNews,
                             newsLoading = newsLoading,
                             onOpenGame = { go(Screen.Game(it)) },
+                            onOpenNews = { id, newsId -> go(Screen.Game(id, newsId)) },
                         )
                         Screen.Library -> LibraryScreen(snapshot, onOpenGame = { go(Screen.Game(it)) })
                         Screen.Store -> StoreScreen()
@@ -271,7 +274,7 @@ fun LauncherApp(onClose: () -> Unit) {
                         is Screen.Game -> {
                             val game = snapshot.findEntry(screen.id)
                             if (game != null) {
-                                GameScreen(game)
+                                GameScreen(game, newsId = screen.newsId)
                             }
                         }
                     }

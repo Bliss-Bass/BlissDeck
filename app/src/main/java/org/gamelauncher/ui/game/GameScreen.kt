@@ -63,8 +63,9 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -82,16 +83,19 @@ import org.gamelauncher.data.LaunchIntentKind
 import org.gamelauncher.data.LocalArtwork
 import org.gamelauncher.data.LocalCollections
 import org.gamelauncher.data.LocalDetails
+import org.gamelauncher.data.LocalNews
 import org.gamelauncher.data.LocalPlayHistory
 import org.gamelauncher.data.LocalSettings
 import org.gamelauncher.data.LocalTheme
 import org.gamelauncher.data.LocalTitles
+import org.gamelauncher.data.NewsItem
 import org.gamelauncher.data.SteamNative
 import org.gamelauncher.data.TitleDetails
 import org.gamelauncher.data.TitleOverride
 import org.gamelauncher.data.UNITY_FORCE_GLES
 import org.gamelauncher.data.UNITY_FORCE_VULKAN
 import org.gamelauncher.data.WindowingMode
+import org.gamelauncher.data.toInstalledApp
 import org.gamelauncher.ui.components.AmbientBackdrop
 import org.gamelauncher.ui.components.GameIcon
 import org.gamelauncher.ui.components.ArtworkLayer
@@ -107,6 +111,8 @@ import org.gamelauncher.ui.components.rememberArtwork
 import org.gamelauncher.ui.theme.Background
 import org.gamelauncher.ui.theme.Footer
 import org.gamelauncher.ui.theme.Menu
+import org.gamelauncher.ui.theme.NewsBugfix
+import org.gamelauncher.ui.theme.NewsUpdate
 import org.gamelauncher.ui.theme.PlayGreen
 import org.gamelauncher.ui.theme.StopRed
 import org.gamelauncher.ui.theme.TextMuted
@@ -116,7 +122,7 @@ import org.gamelauncher.ui.theme.frosted
 import kotlin.math.roundToInt
 
 @Composable
-fun GameScreen(game: Game) {
+fun GameScreen(game: Game, newsId: String? = null) {
     var tab by remember { mutableStateOf(GamePageTab.Activity) }
     val visibleTabs = LocalTheme.current.layouts.gameTabs()
     LaunchedEffect(visibleTabs) {
@@ -156,7 +162,7 @@ fun GameScreen(game: Game) {
             Spacer(Modifier.height(16.dp))
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (tab) {
-                    GamePageTab.Activity -> ActivityPane(game, details)
+                    GamePageTab.Activity -> ActivityPane(game, details, newsId)
                     GamePageTab.Community -> CommunityPane(game, details)
                     GamePageTab.GameInfo -> GameInfoPane(game, details)
                 }
@@ -393,23 +399,117 @@ private fun GamePlayBar(
 }
 
 @Composable
-private fun ActivityPane(game: Game, details: TitleDetails) {
-    Row(
-        modifier = Modifier.padding(horizontal = 32.dp),
-        verticalAlignment = Alignment.CenterVertically,
+private fun ActivityPane(game: Game, details: TitleDetails, highlightNewsId: String?) {
+    val newsRepo = LocalNews.current
+    val app = remember(game.id, game.packageName, game.isMedia, game.inLibrary) { game.toInstalledApp() }
+    val cached = remember(game.packageName) { newsRepo.peekNews(app) }
+    val loaded by produceState(cached to cached.isEmpty(), game.packageName) {
+        value = runCatching { newsRepo.newsFor(app) }.getOrDefault(cached) to false
+    }
+    val items = loaded.first
+    val loading = loaded.second
+    val history = LocalPlayHistory.current
+    val historyEpoch by history.epoch.collectAsState()
+    val lastPlayed = remember(historyEpoch, game.packageName) { history.lastPlayedLabel(game.packageName) }
+    val playTime = remember(historyEpoch, game.packageName) { history.playTimeLabel(game.packageName) }
+    val launched = remember(historyEpoch, game.packageName) { history.launchCount(game.packageName) > 0 }
+    val players = if (details.players.isNotBlank()) details.players else game.players
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 4.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .width(88.dp)
-                .height(18.dp)
-                .background(hueBrush(game.coverHue, portrait = false)),
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(game.title, color = TextPrimary, fontSize = 16.sp)
-        Spacer(Modifier.weight(1f))
-        Icon(Icons.Default.Person, contentDescription = null, tint = TextPrimary)
-        Spacer(Modifier.width(6.dp))
-        Text(if (details.players.isNotBlank()) details.players else game.players, color = TextPrimary, fontSize = 15.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .width(88.dp)
+                    .height(18.dp)
+                    .background(hueBrush(game.coverHue, portrait = false)),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(game.title, color = TextPrimary, fontSize = 16.sp)
+            Spacer(Modifier.weight(1f))
+            Icon(Icons.Default.Person, contentDescription = null, tint = TextPrimary)
+            Spacer(Modifier.width(6.dp))
+            Text(players, color = TextPrimary, fontSize = 15.sp)
+        }
+        if (launched) {
+            Spacer(Modifier.height(18.dp))
+            Text("Played", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            Text("$lastPlayed · $playTime", color = TextMuted, fontSize = 16.sp)
+        }
+        Spacer(Modifier.height(22.dp))
+        Text("Updates", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(12.dp))
+        when {
+            loading && items.isEmpty() -> Text("Checking Play Store…", color = TextMuted, fontSize = 16.sp)
+            items.isEmpty() -> Text("No updates for this title yet", color = TextMuted, fontSize = 16.sp)
+            else -> {
+                items.forEachIndexed { index, item ->
+                    if (index > 0) Spacer(Modifier.height(12.dp))
+                    ActivityUpdateCard(item, game, selected = item.id == highlightNewsId)
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun ActivityUpdateCard(item: NewsItem, game: Game, selected: Boolean) {
+    val kindColor = if (item.kind.contains("BUG", ignoreCase = true)) NewsBugfix else NewsUpdate
+    val shape = cardShape()
+    val banner = item.imageUrl
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .tileFrame(selected, shape)
+            .clip(shape)
+            .background(Tile),
+    ) {
+        if (!banner.isNullOrBlank()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .background(hueBrush(game.coverHue, portrait = false)),
+            ) {
+                AsyncImage(
+                    model = banner,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                item.kind,
+                color = kindColor,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+            )
+            if (item.date.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(item.date, color = TextMuted, fontSize = 13.sp)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                item.version,
+                color = TextPrimary,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            val text = item.fullText
+            if (text.isNotBlank()) {
+                Spacer(Modifier.height(10.dp))
+                Text(text, color = TextPrimary, fontSize = 15.sp)
+            }
+        }
     }
 }
 

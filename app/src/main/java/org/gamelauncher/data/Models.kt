@@ -55,7 +55,10 @@ data class NewsItem(
     val gameTitle: String,
     val imageUrl: String? = null,
     val sortMillis: Long = 0L,
-)
+    val detail: String = "",
+) {
+    val fullText: String get() = detail.ifBlank { body }
+}
 
 data class Screenshot(
     val id: String,

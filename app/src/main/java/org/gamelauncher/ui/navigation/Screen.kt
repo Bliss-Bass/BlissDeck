@@ -5,7 +5,7 @@ sealed interface Screen {
     data object Library : Screen
     data object Store : Screen
     data object Settings : Screen
-    data class Game(val id: String) : Screen
+    data class Game(val id: String, val newsId: String? = null) : Screen
 }
 
 enum class MenuItem(val label: String, val enabled: Boolean) {

@@ -41,6 +41,18 @@ object InstalledCatalog {
 fun LibrarySnapshot.findEntry(id: String): Game? =
     games.firstOrNull { it.id == id } ?: installed.firstOrNull { it.id == id }?.toGame()
 
+fun Game.toInstalledApp(): InstalledApp = InstalledApp(
+    id = id,
+    title = title,
+    packageName = packageName,
+    coverHue = coverHue,
+    isGame = inLibrary,
+    detectedGame = detectedGame,
+    hasLeanback = hasLeanback,
+    detectedMedia = detectedMedia,
+    isMedia = isMedia,
+)
+
 fun InstalledApp.toGame(): Game = Game(
     id = id,
     title = title,

@@ -2,6 +2,7 @@ package org.gamelauncher.data
 
 import android.content.Context
 import android.util.Log
+import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -225,6 +226,51 @@ class PlayNewsRepository(context: Context) {
         return next.takeIf { !it.missing }?.toDetails()
     }
 
+    fun peekNews(app: InstalledApp): List<NewsItem> = assembleTitle(app, listingOf(app.packageName), steamHitsOf(app.packageName))
+
+    suspend fun newsFor(app: InstalledApp): List<NewsItem> = withContext(Dispatchers.IO) {
+        var listing = listingOf(app.packageName)
+        if (listing == null || listing.stale()) {
+            val fetched = runCatching { client.fetch(app.packageName) }.getOrNull()
+            listing = fetched.toCached(listing)
+            writeCache(app.packageName, listing)
+        }
+        val steamAppId = SteamNative.steamAppId(app.packageName)
+        var steamHits = steamHitsOf(app.packageName)
+        if (steamAppId != null) {
+            val file = steamFile(steamAppId)
+            val fresh = file.isFile && System.currentTimeMillis() - file.lastModified() < STEAM_TTL_MS
+            if (!fresh) {
+                steamHits = runCatching { steam.news(steamAppId, 8) }.getOrDefault(emptyList())
+                writeSteamCache(steamAppId, steamHits)
+            }
+        }
+        assembleTitle(app, listing, steamHits)
+    }
+
+    private fun listingOf(packageName: String): CachedListing? {
+        val file = cacheFile(packageName)
+        if (!file.isFile) return null
+        return runCatching { CachedListing.fromJson(JSONObject(file.readText())) }.getOrNull()
+    }
+
+    private fun steamHitsOf(packageName: String): List<SteamNewsHit> {
+        val appId = SteamNative.steamAppId(packageName) ?: return emptyList()
+        val file = steamFile(appId)
+        if (!file.isFile) return emptyList()
+        return runCatching { steamHitsFromJson(file.readText()) }.getOrDefault(emptyList())
+    }
+
+    private fun assembleTitle(
+        app: InstalledApp,
+        listing: CachedListing?,
+        steamHits: List<SteamNewsHit>,
+    ): List<NewsItem> {
+        val play = listing?.takeIf { !it.missing }?.toNewsItems(app).orEmpty()
+        val steamItems = steamHits.map { it.toNews(app) }
+        return (play + steamItems).sortedByDescending { it.sortMillis }.distinctBy { it.id }
+    }
+
     companion object {
         private const val TAG = "PlayNews"
         private const val OTHER_APP_WINDOW_MS = 120L * 24 * 60 * 60 * 1000
@@ -294,6 +340,7 @@ internal data class CachedListing(
             gameTitle = app.title,
             imageUrl = heroUrl ?: backgroundUrl,
             sortMillis = updatedMillis ?: 0L,
+            detail = whatsNew.orEmpty().trim(),
         )
     }
 
@@ -462,6 +509,7 @@ private fun SteamNewsHit.toNews(app: InstalledApp): NewsItem {
         gameTitle = app.title,
         imageUrl = SteamNative.steamAppId(app.packageName)?.let(SteamNative::cdnHero),
         sortMillis = dateMillis,
+        detail = body.ifBlank { title },
     )
 }
 
@@ -480,4 +528,8 @@ internal fun isPlaySkipped(packageName: String): Boolean {
         packageName.startsWith("app.gamenative.stub") ||
         packageName == "app.gamenative.stubinstaller" ||
         packageName.startsWith("com.bass.")
+}
+
+val LocalNews = staticCompositionLocalOf<PlayNewsRepository> {
+    error("PlayNewsRepository not provided")
 }

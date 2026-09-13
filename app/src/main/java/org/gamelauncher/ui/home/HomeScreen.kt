@@ -113,6 +113,7 @@ fun HomeScreen(
     mediaNews: List<NewsItem>,
     newsLoading: Boolean,
     onOpenGame: (String) -> Unit,
+    onOpenNews: (String, String) -> Unit = { id, _ -> onOpenGame(id) },
 ) {
     val history = LocalPlayHistory.current
     val historyEpoch by history.epoch.collectAsState()
@@ -261,7 +262,7 @@ fun HomeScreen(
         when (feed) {
             HomeFeedTab.WhatsNew -> {
                 when {
-                    shelfNews.isNotEmpty() -> WhatsNewTimeline(shelfNews, snapshot, onOpenGame)
+                    shelfNews.isNotEmpty() -> WhatsNewTimeline(shelfNews, snapshot, onOpenNews)
                     newsLoading -> EmptyCenter("Checking Play Store…")
                     else -> EmptyCenter(
                         if (shelf == HomeShelfTab.Media) "No media updates yet" else "No news yet",
@@ -697,7 +698,7 @@ private fun FeedTabs(selected: HomeFeedTab, onSelect: (HomeFeedTab) -> Unit) {
 private fun WhatsNewTimeline(
     news: List<NewsItem>,
     snapshot: LibrarySnapshot,
-    onOpenGame: (String) -> Unit,
+    onOpenNews: (String, String) -> Unit,
 ) {
     var selectedNews by remember { mutableStateOf<String?>(null) }
     val cards = news.mapNotNull { item ->
@@ -725,7 +726,7 @@ private fun WhatsNewTimeline(
                     selected = item.id == selectedNews,
                     onFocused = { selectedNews = item.id },
                     modifier = Modifier.width(cardWidth),
-                ) { onOpenGame(item.gameId) }
+                ) { onOpenNews(item.gameId, item.id) }
             }
         }
     }
