@@ -4,7 +4,7 @@
 
 A landscape Steam-library **HOME** for Android-x86, Bliss OS, PrimeOS, and Waydroid. It lists installed Android games and apps, launches them, and can pull covers from [SteamGridDB](https://www.steamgriddb.com/).
 
-The display name is **BlissDeck**. The application ID is still `org.gamelauncher` (`0.1.0-dev`). Source: [Bliss-Bass/BlissDeck](https://github.com/Bliss-Bass/BlissDeck).
+The display name is **BlissDeck**. The application ID is still `org.gamelauncher` (`0.1.1`). Source: [Bliss-Bass/BlissDeck](https://github.com/Bliss-Bass/BlissDeck).
 
 The layouts follow [Vapor Launcher](https://github.com/imperador/vapor-launcher). This is a new Kotlin / Jetpack Compose app, not a Qt port or a ROM frontend.
 

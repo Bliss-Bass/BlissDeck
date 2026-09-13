@@ -1,6 +1,6 @@
 BlissDeck is a landscape Steam-library **HOME** for Android-x86, Bliss OS, PrimeOS, and Waydroid. It lists installed Android games and apps, launches them, and can pull covers from [SteamGridDB](https://www.steamgriddb.com/).
 
-**Early development** (`0.1.0-dev`). Tested on device. The application ID is still `org.gamelauncher`.
+**Early development** (`0.1.1`). Tested on device. The application ID is still `org.gamelauncher`.
 
 ### Highlights
 
