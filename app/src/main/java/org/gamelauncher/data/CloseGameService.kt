@@ -45,13 +45,8 @@ class CloseGameService : AccessibilityService() {
         windows.orEmpty().forEach { window ->
             if (window.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD) return@forEach
             if (window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) return@forEach
-            val root = window.root
-            val pkg = root?.packageName?.toString()
-            if (root != null && android.os.Build.VERSION.SDK_INT < 33) {
-                @Suppress("DEPRECATION")
-                runCatching { root.recycle() }
-            }
-            if (pkg.isNullOrBlank() || GameSession.hideFromSwitcher(pkg, self)) return@forEach
+            val pkg = window.ownerPackage() ?: return@forEach
+            if (GameSession.hideFromSwitcher(pkg, self)) return@forEach
             val title = window.title?.toString()?.takeIf { it.isNotBlank() && '/' !in it }
                 ?: runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }
                     .getOrDefault(pkg)
@@ -100,12 +95,32 @@ class CloseGameService : AccessibilityService() {
         return dispatchGesture(gesture, null, null)
     }
 
-    private fun AccessibilityWindowInfo.belongsTo(packageName: String): Boolean {
+    private fun AccessibilityWindowInfo.ownerPackage(): String? {
         val root = root
-        val pkg = root?.packageName?.toString()
-        if (pkg == packageName) return true
+        val fromRoot = root?.packageName?.toString()
+        if (root != null && android.os.Build.VERSION.SDK_INT < 33) {
+            @Suppress("DEPRECATION")
+            runCatching { root.recycle() }
+        }
+        if (!fromRoot.isNullOrBlank()) return fromRoot
+        return packageFromWindowTitle(title?.toString())
+    }
+
+    private fun AccessibilityWindowInfo.belongsTo(packageName: String): Boolean {
+        if (ownerPackage() == packageName) return true
         val title = title?.toString().orEmpty()
         return title.contains(packageName, ignoreCase = true)
+    }
+
+    private fun packageFromWindowTitle(title: String?): String? {
+        val raw = title?.trim().orEmpty()
+        if (raw.isEmpty()) return null
+        val slash = raw.indexOf('/')
+        if (slash > 0) {
+            val pkg = raw.substring(0, slash).trim()
+            if (pkg.contains('.')) return pkg
+        }
+        return null
     }
 
     private fun AccessibilityWindowInfo.area(): Int {

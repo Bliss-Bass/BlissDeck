@@ -238,16 +238,16 @@ private fun GamePlayBar(
     var actionsOpen by remember { mutableStateOf(false) }
     var launchEditorOpen by remember { mutableStateOf(false) }
     var amRunning by remember(game.packageName) { mutableStateOf(false) }
-    LaunchedEffect(game.packageName, presence.connected) {
-        if (presence.connected) return@LaunchedEffect
+    LaunchedEffect(game.packageName) {
         while (true) {
             amRunning = GameSession.running(context, game.packageName) == true
             delay(1500)
         }
     }
+    val presenceState = AppPresence.state(game.packageName, presence)
     val runState = when {
-        presence.connected -> AppPresence.state(game.packageName, presence)
-        amRunning -> AppRunState.Running
+        presenceState == AppRunState.Closing -> AppRunState.Closing
+        presenceState == AppRunState.Running || amRunning -> AppRunState.Running
         else -> AppRunState.Stopped
     }
 

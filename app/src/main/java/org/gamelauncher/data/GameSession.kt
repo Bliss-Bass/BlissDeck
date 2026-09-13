@@ -86,9 +86,7 @@ object GameSession {
      */
     fun running(context: Context, packageName: String): Boolean? {
         val presence = AppPresence.snapshot.value
-        if (presence.connected) {
-            if (AppPresence.state(packageName, presence) != AppRunState.Stopped) return true
-        }
+        if (AppPresence.state(packageName, presence) != AppRunState.Stopped) return true
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         if (hasUsageAccess(context)) {
             val importance = packageImportance(am, packageName)
@@ -97,12 +95,12 @@ object GameSession {
             }
         }
         if (tasks(am).any { it.matches(packageName) }) return true
-        val procs = am.runningAppProcesses ?: return if (presence.connected) false else null
+        val procs = am.runningAppProcesses ?: return null
         val self = context.packageName
         val match = procs.any { packageName in it.pkgList }
         if (match) return true
         val seesOthers = procs.any { self !in it.pkgList }
-        if (!seesOthers) return if (presence.connected) false else null
+        if (!seesOthers) return null
         return false
     }
 
