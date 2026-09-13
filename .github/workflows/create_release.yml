@@ -71,7 +71,7 @@ jobs:
       with:
         tag_name: ${{ inputs.tag || github.ref_name }}
         files: |
-          app/build/outputs/apk/debug/app-debug.apk
+          app/build/outputs/apk/debug/app-universal-debug.apk
           app/build/outputs/apk/release/*.apk
         body_path: release-notes.md
         generate_release_notes: false

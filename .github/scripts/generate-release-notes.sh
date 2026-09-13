@@ -49,7 +49,16 @@ for apk in "$RELEASE_DIR"/*.apk; do
     *universal*|*app-release.apk) UNIVERSAL_APK="$apk" ;;
   esac
 done
-DEBUG_APK_SIZE="$(apk_size app/build/outputs/apk/debug/app-debug.apk)"
+DEBUG_APK=""
+for apk in app/build/outputs/apk/debug/*.apk; do
+  [ -f "$apk" ] || continue
+  base="$(basename "$apk")"
+  case "$base" in
+    *universal*) DEBUG_APK="$apk" ;;
+    app-debug.apk) DEBUG_APK="$apk" ;;
+  esac
+done
+DEBUG_APK_SIZE="$(apk_size "$DEBUG_APK")"
 UNIVERSAL_SIZE="$(apk_size "$UNIVERSAL_APK")"
 ARM64_SIZE="$(apk_size "$ARM64_APK")"
 X64_SIZE="$(apk_size "$X64_APK")"
@@ -70,7 +79,7 @@ X64_SIZE="$(apk_size "$X64_APK")"
   if [ -n "$X64_APK" ]; then
     echo "| **$(basename "$X64_APK")**${X64_SIZE:+ (~$X64_SIZE)} | Signed **x86_64** build for Android-x86 / Bliss OS tablets. |"
   fi
-  echo "| **app-debug.apk**${DEBUG_APK_SIZE:+ (~$DEBUG_APK_SIZE)} | Debug build with logging enabled. For testing only. |"
+  echo "| **$(basename "${DEBUG_APK:-app-universal-debug.apk}")**${DEBUG_APK_SIZE:+ (~$DEBUG_APK_SIZE)} | Debug build with logging enabled. For testing only. |"
   echo ""
   echo "Almost all of BlissDeck is Kotlin. The per-ABI APKs only differ by a small native library; they will not make a slow tablet faster."
   echo ""
