@@ -42,7 +42,13 @@ CI matches the other Bass Android apps ([BumpDesk](https://github.com/electrikje
 | **Compile Release APK** | manual: signed `app-release.apk` |
 | **Create Release** | `v*` tag: signed release + debug APKs and notes |
 
-Signed jobs need repository Actions secrets: `SIGNING_KEY` (base64 of the `.jks`), `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`. See `keystore.properties.example`.
+Signed jobs need repository Actions secrets: `SIGNING_KEY`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`, `SIGNING_KEY_PASSWORD`. Generate a keystore off-tree and upload those secrets with:
+
+```bash
+.github/scripts/create-release-keystore.sh
+```
+
+That writes `~/.blissdeck-keys/` (back that up) and calls `gh secret set` on `Bliss-Bass/BlissDeck`. See `keystore.properties.example` for a manual local signed build.
 
 ## Build
 
