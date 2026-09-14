@@ -81,27 +81,54 @@ object GameSession {
     }
 
     /**
-     * `true` if [packageName] has a live process, `false` if it does not,
+     * `true` if [packageName] has a visible task or window, `false` if it does not,
      * `null` when this process cannot see other apps (typical on stock Android).
+     *
+     * Cached and service-only leftovers (common with GameNative) are not Running.
      */
     fun running(context: Context, packageName: String): Boolean? {
         val presence = AppPresence.snapshot.value
         if (AppPresence.state(packageName, presence) != AppRunState.Stopped) return true
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        if (liveTasks(am).any { it.matches(packageName) }) return true
         if (hasUsageAccess(context)) {
             val importance = packageImportance(am, packageName)
-            if (importance != null) {
-                return importance < ActivityManager.RunningAppProcessInfo.IMPORTANCE_GONE
-            }
+            if (importance != null) return isVisibleImportance(importance)
         }
-        if (tasks(am).any { it.matches(packageName) }) return true
         val procs = am.runningAppProcesses ?: return null
         val self = context.packageName
-        val match = procs.any { packageName in it.pkgList }
+        val match = procs.any { packageName in it.pkgList && isVisibleImportance(it.importance) }
         if (match) return true
         val seesOthers = procs.any { self !in it.pkgList }
         if (!seesOthers) return null
         return false
+    }
+
+    fun show(
+        context: Context,
+        packageName: String,
+        prefs: LauncherPrefs = LauncherPrefs(),
+        override: TitleOverride = TitleOverride(),
+    ): Boolean {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val task = liveTasks(am).firstOrNull { it.matches(packageName) }
+            ?: recentTasks(am).firstOrNull { it.matches(packageName) }
+        val title = runCatching {
+            val pm = context.packageManager
+            pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString()
+        }.getOrDefault(packageName)
+        return switchTo(context, RunningApp(packageName, title, task?.taskId), prefs, override)
+    }
+
+    fun restart(
+        context: Context,
+        packageName: String,
+        prefs: LauncherPrefs = LauncherPrefs(),
+        override: TitleOverride = TitleOverride(),
+    ): Boolean {
+        close(context, packageName)
+        mainHandler.postDelayed({ launch(context, packageName, prefs, override) }, 500)
+        return true
     }
 
     fun hasXtMapper(context: Context): Boolean =
@@ -203,10 +230,15 @@ object GameSession {
         }
         presence.open.forEach { add(it.packageName, it.taskId) }
         presence.starting.forEach { add(it, null) }
-        tasks(am).forEach { task ->
+        liveTasks(am).forEach { task ->
             add(task.topActivity?.packageName ?: task.baseActivity?.packageName, task.taskId)
         }
+        recentTasks(am).forEach { task ->
+            val pkg = task.topActivity?.packageName ?: task.baseActivity?.packageName
+            if (pkg != null && seen.containsKey(pkg)) add(pkg, task.taskId)
+        }
         am.runningAppProcesses?.forEach { proc ->
+            if (!isVisibleImportance(proc.importance)) return@forEach
             proc.pkgList?.forEach { add(it, null) }
         }
         if (hasUsageAccess(context)) {
@@ -214,9 +246,7 @@ object GameSession {
             launcherPackages(context).forEach { pkg ->
                 if (pkg !in resumed) return@forEach
                 val importance = packageImportance(am, pkg) ?: return@forEach
-                if (importance < ActivityManager.RunningAppProcessInfo.IMPORTANCE_GONE) {
-                    add(pkg, null)
-                }
+                if (isVisibleImportance(importance)) add(pkg, null)
             }
         }
         return seen.values.toList()
@@ -320,24 +350,27 @@ object GameSession {
     private fun requestCode(packageName: String): Int =
         REQUEST_BASE + (packageName.hashCode() and 0x3fff)
 
+    private fun isVisibleImportance(importance: Int): Boolean =
+        importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_PERCEPTIBLE
+
     @Suppress("DEPRECATION")
-    private fun tasks(am: ActivityManager): List<ActivityManager.RunningTaskInfo> {
-        val found = LinkedHashMap<Int, ActivityManager.RunningTaskInfo>()
-        runCatching { am.getRunningTasks(64) }.getOrNull()?.forEach { found[it.taskId] = it }
-        runCatching {
-            am.getRecentTasks(64, ActivityManager.RECENT_WITH_EXCLUDED)
-                .map { recent ->
-                    val info = ActivityManager.RunningTaskInfo()
-                    info.taskId = if (Build.VERSION.SDK_INT >= 29) recent.taskId else {
-                        @Suppress("DEPRECATION")
-                        recent.id
-                    }
-                    info.baseActivity = recent.baseIntent?.component
-                    info.topActivity = recent.origActivity ?: recent.baseIntent?.component
-                    info
+    private fun liveTasks(am: ActivityManager): List<ActivityManager.RunningTaskInfo> =
+        runCatching { am.getRunningTasks(64) }.getOrNull().orEmpty()
+
+    @Suppress("DEPRECATION")
+    private fun recentTasks(am: ActivityManager): List<ActivityManager.RunningTaskInfo> {
+        return runCatching {
+            am.getRecentTasks(64, ActivityManager.RECENT_WITH_EXCLUDED).map { recent ->
+                val info = ActivityManager.RunningTaskInfo()
+                info.taskId = if (Build.VERSION.SDK_INT >= 29) recent.taskId else {
+                    @Suppress("DEPRECATION")
+                    recent.id
                 }
-        }.getOrNull()?.forEach { found.putIfAbsent(it.taskId, it) }
-        return found.values.toList()
+                info.baseActivity = recent.baseIntent?.component
+                info.topActivity = recent.origActivity ?: recent.baseIntent?.component
+                info
+            }
+        }.getOrNull().orEmpty()
     }
 
     private fun ActivityManager.RunningTaskInfo.matches(packageName: String): Boolean {

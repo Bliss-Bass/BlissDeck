@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,8 +33,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Star
@@ -237,7 +240,9 @@ private fun GamePlayBar(
     val mapperInstalled = remember { GameSession.hasXtMapper(context) }
     var actionsOpen by remember { mutableStateOf(false) }
     var launchEditorOpen by remember { mutableStateOf(false) }
+    var runMenuOpen by remember { mutableStateOf(false) }
     var amRunning by remember(game.packageName) { mutableStateOf(false) }
+    val density = LocalDensity.current
     LaunchedEffect(game.packageName) {
         while (true) {
             amRunning = GameSession.running(context, game.packageName) == true
@@ -250,6 +255,25 @@ private fun GamePlayBar(
         presenceState == AppRunState.Running || amRunning -> AppRunState.Running
         else -> AppRunState.Stopped
     }
+    val runColor = when (runState) {
+        AppRunState.Stopped -> PlayGreen
+        AppRunState.Running -> StopRed
+        AppRunState.Closing -> Color(0xFF8A6A32)
+    }
+    fun playApp() {
+        if (GameSession.launch(context, game.packageName, prefs, title)) {
+            history.record(game.packageName)
+        }
+    }
+    fun showApp() {
+        if (GameSession.show(context, game.packageName, prefs, title)) {
+            history.record(game.packageName)
+        }
+    }
+    fun restartApp() {
+        GameSession.restart(context, game.packageName, prefs, title)
+        history.record(game.packageName)
+    }
 
     Row(
         modifier = Modifier
@@ -258,60 +282,103 @@ private fun GamePlayBar(
             .padding(horizontal = 24.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier
-                .width(240.dp)
-                .height(56.dp)
-                .clip(cardShape())
-                .background(
-                    when (runState) {
-                        AppRunState.Stopped -> PlayGreen
-                        AppRunState.Running -> StopRed
-                        AppRunState.Closing -> Color(0xFF8A6A32)
-                    },
-                )
-                .clickable(enabled = runState != AppRunState.Closing) {
-                    when (runState) {
-                        AppRunState.Stopped -> {
-                            if (GameSession.launch(context, game.packageName, prefs, title)) {
-                                history.record(game.packageName)
+        Box {
+            Row(
+                modifier = Modifier
+                    .width(268.dp)
+                    .height(56.dp)
+                    .clip(cardShape())
+                    .background(runColor),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable(enabled = runState != AppRunState.Closing) {
+                            when (runState) {
+                                AppRunState.Stopped -> playApp()
+                                AppRunState.Running -> GameSession.close(context, game.packageName)
+                                AppRunState.Closing -> Unit
                             }
                         }
-                        AppRunState.Running -> GameSession.close(context, game.packageName)
-                        AppRunState.Closing -> Unit
-                    }
+                        .semantics {
+                            contentDescription = when (runState) {
+                                AppRunState.Stopped -> "Play"
+                                AppRunState.Running -> "Running"
+                                AppRunState.Closing -> "Closing"
+                            }
+                        }
+                        .padding(start = 18.dp, end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = if (runState == AppRunState.Stopped) {
+                            Icons.Default.PlayArrow
+                        } else {
+                            Icons.Default.Close
+                        },
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        when (runState) {
+                            AppRunState.Stopped -> "Play"
+                            AppRunState.Running -> "Running"
+                            AppRunState.Closing -> "Closing"
+                        },
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
-                .semantics {
-                    contentDescription = when (runState) {
-                        AppRunState.Stopped -> "Play"
-                        AppRunState.Running -> "Running"
-                        AppRunState.Closing -> "Closing"
-                    }
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(32.dp)
+                        .background(Color.White.copy(alpha = 0.35f)),
+                )
+                Box(
+                    modifier = Modifier
+                        .width(48.dp)
+                        .fillMaxHeight()
+                        .clickable { runMenuOpen = !runMenuOpen }
+                        .semantics { contentDescription = "App actions" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Default.ArrowDropDown,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp),
+                    )
                 }
-                .padding(horizontal = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = if (runState == AppRunState.Stopped) {
-                    Icons.Default.PlayArrow
-                } else {
-                    Icons.Default.Close
-                },
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(32.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                when (runState) {
-                    AppRunState.Stopped -> "Play"
-                    AppRunState.Running -> "Running"
-                    AppRunState.Closing -> "Closing"
-                },
-                color = Color.White,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
+            }
+            if (runMenuOpen) {
+                Popup(
+                    alignment = Alignment.BottomStart,
+                    offset = IntOffset(0, with(density) { -56.dp.roundToPx() }),
+                    onDismissRequest = { runMenuOpen = false },
+                    properties = PopupProperties(focusable = true),
+                ) {
+                    PlayRunMenu(
+                        onShow = {
+                            runMenuOpen = false
+                            showApp()
+                        },
+                        onForceClose = {
+                            runMenuOpen = false
+                            GameSession.close(context, game.packageName)
+                        },
+                        onRestart = {
+                            runMenuOpen = false
+                            restartApp()
+                        },
+                    )
+                }
+            }
         }
         Spacer(Modifier.width(28.dp))
         Stat("Last Played", lastPlayed)
@@ -330,7 +397,6 @@ private fun GamePlayBar(
             description = "Open XTMapper",
         )
         Spacer(Modifier.width(10.dp))
-        val density = LocalDensity.current
         Box {
             Glyph(
                 Icons.Default.Settings,
@@ -1188,6 +1254,26 @@ private val TitleOverride.hasLaunchTweaks: Boolean
         launchIntent != null ||
         extras.isNotBlank() ||
         activity.isNotBlank()
+
+@Composable
+private fun PlayRunMenu(
+    onShow: () -> Unit,
+    onForceClose: () -> Unit,
+    onRestart: () -> Unit,
+) {
+    val menuColor = Menu.copy(alpha = LocalTheme.current.chrome.menuAlpha)
+    Column(
+        modifier = Modifier
+            .width(240.dp)
+            .clip(cardShape())
+            .frosted(menuColor)
+            .padding(vertical = 8.dp),
+    ) {
+        GameActionRow(label = "Show", icon = Icons.Default.OpenInNew, onClick = onShow)
+        GameActionRow(label = "Force-close", icon = Icons.Default.Close, onClick = onForceClose)
+        GameActionRow(label = "Restart", icon = Icons.Default.Refresh, onClick = onRestart)
+    }
+}
 
 @Composable
 private fun GameActionsMenu(
