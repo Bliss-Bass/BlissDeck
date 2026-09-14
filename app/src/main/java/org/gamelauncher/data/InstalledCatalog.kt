@@ -1,11 +1,20 @@
 package org.gamelauncher.data
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.os.Build
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import kotlin.math.absoluteValue
 
 object InstalledCatalog {
@@ -36,6 +45,39 @@ object InstalledCatalog {
             .distinct()
             .filter { it != self }
     }
+}
+
+/**
+ * BlissDeck is often the default Home with singleTask, so the process stays up across
+ * installs. Reload the launcher catalog on resume and on package add/remove/change.
+ */
+@Composable
+fun rememberInstalledSnapshot(): LibrarySnapshot {
+    val context = LocalContext.current
+    val resumeTick = rememberResumeTick()
+    var packageTick by remember { mutableIntStateOf(0) }
+    DisposableEffect(context) {
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addAction(Intent.ACTION_PACKAGE_CHANGED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addDataScheme("package")
+        }
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_PACKAGE_REMOVED &&
+                    intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)
+                ) {
+                    return
+                }
+                packageTick++
+            }
+        }
+        context.registerReceiver(receiver, filter)
+        onDispose { runCatching { context.unregisterReceiver(receiver) } }
+    }
+    return remember(resumeTick, packageTick, context) { InstalledCatalog.load(context) }
 }
 
 data class ExportedActivity(

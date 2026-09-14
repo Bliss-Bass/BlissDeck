@@ -39,7 +39,6 @@ import org.gamelauncher.data.AppPresence
 import org.gamelauncher.data.ArtworkRepository
 import org.gamelauncher.data.CollectionsStore
 import org.gamelauncher.data.GameSession
-import org.gamelauncher.data.InstalledCatalog
 import org.gamelauncher.data.LauncherSettings
 import org.gamelauncher.data.LocalAccountPhoto
 import org.gamelauncher.data.LocalArtwork
@@ -58,6 +57,7 @@ import org.gamelauncher.data.RunningApp
 import org.gamelauncher.data.TitleDetailsRepository
 import org.gamelauncher.data.effectiveFontScale
 import org.gamelauncher.data.findEntry
+import org.gamelauncher.data.rememberInstalledSnapshot
 import org.gamelauncher.data.withOverrides
 import org.gamelauncher.ui.chrome.ApplySystemBarMode
 import org.gamelauncher.ui.chrome.CommandBar
@@ -92,7 +92,8 @@ fun LauncherApp(onClose: () -> Unit) {
     val theme by themeStore.resolved.collectAsState()
     GameLauncherTheme(theme) {
         val context = LocalContext.current
-        val snapshotBase = remember(context) { InstalledCatalog.load(context) }
+        // Home/singleTask keeps this process alive; reload when packages change or we resume.
+        val snapshotBase = rememberInstalledSnapshot()
         val newsRepo = remember(context) { PlayNewsRepository(context) }
         val settings = remember(context) { LauncherSettings(context) }
         val titles = remember(context) { TitleOverridesStore(context) }
