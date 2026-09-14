@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import java.io.File
 
 class AccountPhotoStore(context: Context) {
-    private val app = context.applicationContext
+    private val app = context.applicationContext.appStorage()
     private val file = File(app.filesDir, "account.jpg")
     private val _epoch = MutableStateFlow(0)
     val epoch: StateFlow<Int> = _epoch
@@ -30,6 +30,7 @@ class AccountPhotoStore(context: Context) {
         val original = app.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
             ?: return
         val scaled = original.scaled(256)
+        file.parentFile?.mkdirs()
         file.outputStream().use { out ->
             scaled.compress(Bitmap.CompressFormat.JPEG, 88, out)
         }
