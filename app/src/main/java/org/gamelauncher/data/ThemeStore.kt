@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import java.io.File
 
 class ThemeStore(context: Context) {
-    private val app = context.applicationContext
+    private val app = context.applicationContext.appStorage()
     private val dir = File(app.filesDir, "themes").apply { mkdirs() }
     private val prefs = app.getSharedPreferences("launcher", Context.MODE_PRIVATE)
     private val _resolved = MutableStateFlow(ThemePack.Default)
@@ -50,6 +50,7 @@ class ThemeStore(context: Context) {
         val id = parsed.id.replace(Regex("[^a-zA-Z0-9._-]"), "_").ifBlank { "imported" }
         val unique = uniqueId(id)
         val named = parsed.copy(id = unique, name = parsed.name.ifBlank { unique })
+        dir.mkdirs()
         File(dir, "$unique.ini").writeText(named.toIni())
         val current = enabledIds().toMutableList()
         if (unique !in current) current.add(unique)
@@ -58,10 +59,14 @@ class ThemeStore(context: Context) {
         return true
     }
 
-    fun exportCustom(): String = customFile().readText()
+    fun exportCustom(): String {
+        val file = customFile()
+        return if (file.isFile) file.readText() else _resolved.value.copy(id = "custom", name = "Custom", builtin = false).toIni()
+    }
 
     fun patchCustom(block: (ThemePack) -> ThemePack) {
         val next = block(_resolved.value).copy(id = "custom", name = "Custom", builtin = false)
+        dir.mkdirs()
         customFile().writeText(next.toIni())
         val current = enabledIds().toMutableList()
         current.remove("custom")

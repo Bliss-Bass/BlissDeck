@@ -89,7 +89,8 @@ fun LauncherPrefs.recentsMetrics(): RecentsMetrics {
 }
 
 class LauncherSettings(context: Context) {
-    private val prefs = context.applicationContext.getSharedPreferences("launcher", Context.MODE_PRIVATE)
+    private val prefs = context.applicationContext.appStorage()
+        .getSharedPreferences("launcher", Context.MODE_PRIVATE)
     private val _state = MutableStateFlow(read())
     val state: StateFlow<LauncherPrefs> = _state
 
